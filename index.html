@@ -10,7 +10,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -21,6 +21,7 @@
   <div class="tb-right">
     <button class="tb-btn" id="btnSummary" title="生成摘要">摘</button>
     <button class="tb-btn" id="btnCast" title="人设库">人</button>
+    <button class="tb-btn" id="btnHistory" title="历史卡片">卡</button>
     <button class="tb-btn" id="btnState" title="状态文件">态</button>
     <button class="tb-btn" id="btnSettings" title="设置">⚙</button>
   </div>
@@ -273,6 +274,22 @@
   </div>
 </div>
 
+<!-- 历史卡片 -->
+<div class="modal" id="modalHistory">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>关闭</button>
+    <span class="modal-title">历史卡片</span>
+    <button class="modal-save" id="btnClearHistory">清空</button>
+  </div>
+  <div class="modal-body">
+    <div class="hist-bar">
+      <input id="histSearch" class="pick-search" type="search" placeholder="搜索卡片内容" autocomplete="off">
+    </div>
+    <div class="hist-meta" id="histMeta"></div>
+    <div class="hist-list" id="histList"></div>
+  </div>
+</div>
+
 <!-- 确认弹窗 -->
 <div class="modal modal-small" id="modalConfirm">
   <div class="modal-body confirm-body">
@@ -340,6 +357,7 @@
 <script src="prompts.js?v=1"></script>
 <script src="confirm.js?v=1"></script>
 <script src="cast.js?v=4"></script>
-<script src="app.js?v=9"></script>
+<script src="history.js?v=1"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

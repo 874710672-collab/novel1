@@ -136,7 +136,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory'];
 let openModalId = null;
 
 function openModal(id) {
@@ -720,6 +720,7 @@ function renderCards() {
       if (b.dataset.act === 'insert') insertToEditor(card.text);
       if (b.dataset.act === 'copy') copyText(card.text);
       if (b.dataset.act === 'drop') {
+        // 丢弃时不删历史记录，只从当前视野移除；历史里仍可找回
         lastCards = lastCards.filter(c => c.seq !== card.seq);
         renderCards();
       }
@@ -796,7 +797,18 @@ async function doDraw() {
       card.text = full;
       card.streaming = false;
       if (full.trim()) {
-        db.cards.push({ id: uid(), text: full, createdAt: Date.now() });
+        // 历史卡片带完整信息，同时保留提示词与生成参数便于回看
+        const rec = {
+          id: uid(),
+          text: full,
+          prompt: prompt,
+          chapterNo: (currentChapter() || {}).no || null,
+          chapterTitle: (currentChapter() || {}).title || '',
+          temperature: db.settings.temperature,
+          createdAt: Date.now()
+        };
+        db.cards.push(rec);
+        card.historyId = rec.id;
         saveDB();
       }
     } catch (e) {
@@ -1262,6 +1274,15 @@ function init() {
     const fs = e.target.files;
     if (fs) importChapters(fs);
     e.target.value = '';
+  });
+
+  // 历史卡片
+  $('btnHistory').addEventListener('click', openHistory);
+  $('btnClearHistory').addEventListener('click', clearHistory);
+  $('histSearch').addEventListener('input', e => {
+    histQuery = e.target.value;
+    histLimit = 60;
+    renderHistory();
   });
 
   // 人设库
