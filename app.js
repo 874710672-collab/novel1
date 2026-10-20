@@ -1,31 +1,28 @@
 /* ===== 抽卡写小说 · 核心逻辑 ===== */
 'use strict';
 
-const DB_KEY = 'novel.app.v1';
+const DB_KEY = 'novel.app.v1';      /* 单书版本用的 key，迁移后保留 */
+const SHELF_KEY = 'novel.shelf.v2';  /* 书架版 */
 
-/* ---------- 数据层 ---------- */
-let db = null;
+/* ============================================================
+   数据结构
+   - shelf: { settings, books: [{id, title, createdAt, updatedAt, data}] }
+   - data : 单本书的全部内容
+   db 始终指向「当前打开那本书」的 data，其余代码不用改
+   ============================================================ */
 
-function defaultDB() {
+let shelf = null;       // 书架
+let db = null;          // 当前书的 data（引用 shelf.books[i].data）
+let currentBookId = null;
+
+function defaultBookData() {
   return {
-    chapters: [],        // {id, no, title, body, summary, updatedAt}
-    stateFile: '',       // 状态文件全文
-    cards: [],           // 抽卡记录 {id, text, createdAt}
-    settings: {
-      base: 'https://api.deepseek.com/v1',
-      key: '',
-      model: 'deepseek-chat',
-      temperature: 1.0,
-      stylePrompt: (typeof DEFAULT_STYLE_PROMPT !== 'undefined' ? DEFAULT_STYLE_PROMPT : '')
-    },
-    lastChapterId: null,   // 上次打开的章节
-
-    // 人物人设库 {id, name, role, body}
+    chapters: [],
+    stateFile: '',
+    cards: [],
+    lastChapterId: null,
     characters: [],
-    // 世界观条目库 {id, title, body}
     worldEntries: [],
-
-    // 抽卡上下文勾选状态（持久化）
     ctx: {
       style: true,
       state: true,
@@ -38,28 +35,125 @@ function defaultDB() {
   };
 }
 
-function loadDB() {
-  try {
-    const raw = localStorage.getItem(DB_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      db = Object.assign(defaultDB(), parsed);
-      db.settings = Object.assign(defaultDB().settings, parsed.settings || {});
-      db.ctx = Object.assign(defaultDB().ctx, parsed.ctx || {});
-    } else {
-      db = defaultDB();
-    }
-  } catch (e) {
-    db = defaultDB();
-  }
+function defaultSettings() {
+  return {
+    base: 'https://api.deepseek.com/v1',
+    key: '',
+    model: 'deepseek-chat',
+    temperature: 1.0,
+    stylePrompt: (typeof DEFAULT_STYLE_PROMPT !== 'undefined' ? DEFAULT_STYLE_PROMPT : '')
+  };
 }
 
-function saveDB() {
+function defaultShelf() {
+  return { settings: defaultSettings(), books: [], currentBookId: null };
+}
+
+/* 旧的单书结构 → 书架结构 */
+function migrateLegacy(legacy) {
+  const data = defaultBookData();
+  data.chapters = legacy.chapters || [];
+  data.stateFile = legacy.stateFile || '';
+  data.cards = legacy.cards || [];
+  data.lastChapterId = legacy.lastChapterId || null;
+  data.characters = legacy.characters || [];
+  data.worldEntries = legacy.worldEntries || [];
+  data.ctx = Object.assign(defaultBookData().ctx, legacy.ctx || {});
+
+  const book = {
+    id: uid(),
+    title: '我的书',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    data
+  };
+
+  return {
+    settings: Object.assign(defaultSettings(), legacy.settings || {}),
+    books: [book],
+    currentBookId: book.id
+  };
+}
+
+function loadShelf() {
   try {
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    const raw = localStorage.getItem(SHELF_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      shelf = Object.assign(defaultShelf(), parsed);
+      shelf.settings = Object.assign(defaultSettings(), parsed.settings || {});
+      shelf.books = (parsed.books || []).map(b => ({
+        id: b.id,
+        title: b.title || '未命名',
+        createdAt: b.createdAt || Date.now(),
+        updatedAt: b.updatedAt || Date.now(),
+        data: Object.assign(defaultBookData(), b.data || {})
+      }));
+      // 补齐每本书的 ctx
+      shelf.books.forEach(b => {
+        b.data.ctx = Object.assign(defaultBookData().ctx, b.data.ctx || {});
+      });
+    } else {
+      // 尝试从旧结构迁移
+      const legacyRaw = localStorage.getItem(DB_KEY);
+      if (legacyRaw) {
+        const legacy = JSON.parse(legacyRaw);
+        shelf = migrateLegacy(legacy);
+        saveShelf();
+        // 保留旧数据，改名留一份，防止迁移出错
+        localStorage.setItem('novel.app.v1.backup', legacyRaw);
+        localStorage.removeItem(DB_KEY);
+      } else {
+        shelf = defaultShelf();
+      }
+    }
+  } catch (e) {
+    shelf = defaultShelf();
+  }
+
+  // 没有书就建一本
+  if (!shelf.books.length) {
+    const book = {
+      id: uid(), title: '我的书',
+      createdAt: Date.now(), updatedAt: Date.now(),
+      data: defaultBookData()
+    };
+    shelf.books.push(book);
+    shelf.currentBookId = book.id;
+    saveShelf();
+  }
+
+  // 确定当前书
+  let cur = shelf.books.find(b => b.id === shelf.currentBookId);
+  if (!cur) {
+    cur = shelf.books[0];
+    shelf.currentBookId = cur.id;
+  }
+  currentBookId = cur.id;
+  db = cur.data;
+}
+
+function saveShelf() {
+  try {
+    localStorage.setItem(SHELF_KEY, JSON.stringify(shelf));
   } catch (e) {
     toast('保存失败，本地空间可能已满');
   }
+}
+
+/* 兼容旧代码：saveDB 保存整个书架 */
+function saveDB() {
+  const cur = shelf.books.find(b => b.id === currentBookId);
+  if (cur) {
+    cur.data = db;
+    cur.updatedAt = Date.now();
+  }
+  saveShelf();
+}
+
+/* ---------- 设置（全局，不属于任何一本书） ---------- */
+function getSettings() {
+  return shelf ? shelf.settings : defaultSettings();
 }
 
 /* ---------- 工具 ---------- */
@@ -136,7 +230,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit'];
 let openModalId = null;
 
 function openModal(id) {
@@ -558,8 +652,8 @@ function makeCtxRow(c, field) {
 function buildContext() {
   const parts = [];
 
-  if (db.ctx.style && db.settings.stylePrompt.trim()) {
-    parts.push(db.settings.stylePrompt.trim());
+  if (db.ctx.style && getSettings().stylePrompt.trim()) {
+    parts.push(getSettings().stylePrompt.trim());
   }
 
   if (db.ctx.state && db.stateFile.trim()) {
@@ -614,7 +708,7 @@ function buildContext() {
 
 /* ===== API 调用（流式） ===== */
 async function callModel(systemMsg, userMsg, onChunk, signal) {
-  const s = db.settings;
+  const s = getSettings();
   if (!s.base || !s.model) throw new Error('请先到设置里填写接口地址和模型');
   if (!s.key) throw new Error('请先到设置里填写 API Key');
 
@@ -804,7 +898,7 @@ async function doDraw() {
           prompt: prompt,
           chapterNo: (currentChapter() || {}).no || null,
           chapterTitle: (currentChapter() || {}).title || '',
-          temperature: db.settings.temperature,
+          temperature: getSettings().temperature,
           createdAt: Date.now()
         };
         db.cards.push(rec);
@@ -985,26 +1079,59 @@ function download(filename, content, type) {
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
 
-function exportAll() {
-  flushEditor();
-  const payload = {
-    app: 'novel-draw', version: 1,
-    exportedAt: new Date().toISOString(),
-    data: db
-  };
-  download(`小说备份-${todayStr()}.json`, JSON.stringify(payload, null, 2), 'application/json');
-  toast(`已导出 ${db.chapters.length} 章`);
-}
-
 function exportMarkdown() {
   flushEditor();
   if (!db.chapters.length) { toast('还没有章节'); return; }
   const sorted = [...db.chapters].sort((a, b) => a.no - b.no);
+  const cur = shelf.books.find(b => b.id === currentBookId);
+  const title = cur ? cur.title : '正文';
   const text = sorted.map(c =>
-    `# 第${c.no}章 ${c.title || ''}\n\n${c.body.trim()}`
+    `# 第${c.no}章 ${c.title || ''}\n\n${(c.body || '').trim()}`
   ).join('\n\n\n');
-  download(`正文合集-${todayStr()}.md`, text, 'text/markdown;charset=utf-8');
+  const safeName = (title || '正文').replace(/[\\/:*?"<>|]/g, '_');
+  download(`${safeName}-${todayStr()}.md`, text, 'text/markdown;charset=utf-8');
   toast(`已导出 ${sorted.length} 章`);
+}
+
+function exportAll() {
+  flushEditor();
+  const payload = {
+    app: 'novel-draw',
+    version: 2,
+    scope: 'whole-shelf',
+    exportedAt: new Date().toISOString(),
+    shelf: shelf
+  };
+  download(`书架备份-${todayStr()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  const totalCh = shelf.books.reduce((n, b) => n + (b.data.chapters || []).length, 0);
+  toast(`已导出 ${shelf.books.length} 本，共 ${totalCh} 章`);
+}
+
+/** 把各种版本的文件统一成「一本书」 */
+function normalizeToBook(incoming) {
+  // 单本导出格式 {book:{title,data}}
+  if (incoming && incoming.book && incoming.book.data) {
+    return {
+      title: incoming.book.title || '导入的书',
+      data: Object.assign(defaultBookData(), incoming.book.data)
+    };
+  }
+  // 旧单书格式 {chapters:[...]}
+  if (incoming && Array.isArray(incoming.chapters)) {
+    return {
+      title: '导入的书',
+      data: Object.assign(defaultBookData(), {
+        chapters: incoming.chapters,
+        stateFile: incoming.stateFile || '',
+        cards: incoming.cards || [],
+        characters: incoming.characters || [],
+        worldEntries: incoming.worldEntries || [],
+        lastChapterId: incoming.lastChapterId || null,
+        ctx: incoming.ctx || {}
+      })
+    };
+  }
+  return null;
 }
 
 function importBackup(file) {
@@ -1012,27 +1139,89 @@ function importBackup(file) {
   fr.onload = () => {
     try {
       const p = JSON.parse(fr.result);
+
+      // 整个书架
+      if (p && p.shelf && Array.isArray(p.shelf.books)) {
+        return handleShelfImport(p.shelf);
+      }
+
+      // 单本 / 旧格式
       const incoming = p.data || p;
-      if (!incoming || !Array.isArray(incoming.chapters)) throw new Error('不是有效的备份文件');
-
-      const merged = Object.assign(defaultDB(), incoming);
-      merged.settings = Object.assign(defaultDB().settings, incoming.settings || {});
-      merged.ctx = Object.assign(defaultDB().ctx, incoming.ctx || {});
-      db = merged;
-      saveDB();
-
-      currentChapterId = db.chapters.length ? db.chapters[0].id : null;
-      selectChapter(currentChapterId);
-      renderCtxLists();
-      renderCtxChips();
-      updateStorageHint();
-      closeModal();
-      toast(`导入完成，共 ${db.chapters.length} 章`);
+      const one = normalizeToBook(incoming) || normalizeToBook(p);
+      if (!one) throw new Error('不是有效的备份文件');
+      return handleSingleBookImport(one);
     } catch (e) {
       toast('导入失败：' + e.message);
     }
   };
   fr.readAsText(file);
+}
+
+async function handleShelfImport(inShelf) {
+  const n = inShelf.books.length;
+  const ok = await askConfirm(
+    '导入整个书架？',
+    `这个文件包含 ${n} 本书。导入后会替换当前书架上的全部内容（当前 ${shelf.books.length} 本）。`,
+    '导入并替换'
+  );
+  if (!ok) return;
+
+  shelf = Object.assign(defaultShelf(), inShelf);
+  shelf.settings = Object.assign(defaultSettings(), inShelf.settings || {});
+  shelf.books = (inShelf.books || []).map(b => ({
+    id: b.id || uid(),
+    title: b.title || '未命名',
+    createdAt: b.createdAt || Date.now(),
+    updatedAt: b.updatedAt || Date.now(),
+    data: Object.assign(defaultBookData(), b.data || {})
+  }));
+  shelf.books.forEach(b => {
+    b.data.ctx = Object.assign(defaultBookData().ctx, b.data.ctx || {});
+  });
+
+  // 保留当前 API Key，避免导入后要重填
+  const keepKey = getSettings().key;
+  if (keepKey && !shelf.settings.key) shelf.settings.key = keepKey;
+
+  if (!shelf.books.length) {
+    shelf.books.push({
+      id: uid(), title: '我的书', createdAt: Date.now(), updatedAt: Date.now(),
+      data: defaultBookData()
+    });
+  }
+  shelf.currentBookId = shelf.books[0].id;
+  saveShelf();
+
+  closeModal();
+  setTimeout(() => location.reload(), 200);
+  toast(`已导入 ${n} 本书`);
+}
+
+async function handleSingleBookImport(one) {
+  const title = one.title || '导入的书';
+  const chCount = (one.data.chapters || []).length;
+  const ok = await askConfirm(
+    `导入《${title}》？`,
+    `将作为一本新书加入书架，包含 ${chCount} 章。不影响现有书籍。`,
+    '导入'
+  );
+  if (!ok) return;
+
+  const book = {
+    id: uid(),
+    title,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    data: Object.assign(defaultBookData(), one.data)
+  };
+  book.data.ctx = Object.assign(defaultBookData().ctx, book.data.ctx || {});
+
+  shelf.books.push(book);
+  saveShelf();
+
+  closeModal();
+  setTimeout(() => { renderShelf(); openModal('modalShelf'); }, 260);
+  toast(`已导入《${title}》，可以在书架里切换`);
 }
 
 function importChapters(files) {
@@ -1086,15 +1275,18 @@ function todayStr() {
 
 function updateStorageHint() {
   let size = 0;
-  try { size = new Blob([localStorage.getItem(DB_KEY) || '']).size; } catch (e) {}
+  try { size = new Blob([localStorage.getItem(SHELF_KEY) || '']).size; } catch (e) {}
+  const totalCh = shelf.books.reduce((n, b) => n + (b.data.chapters || []).length, 0);
+  const cur = shelf.books.find(b => b.id === currentBookId);
   $('storageHint').textContent =
-    `当前 ${db.chapters.length} 章 · 本地占用约 ${(size / 1024).toFixed(1)} KB。` +
+    `书架 ${shelf.books.length} 本 · 当前《${cur ? cur.title : '—'}》${db.chapters.length} 章 · ` +
+    `共 ${totalCh} 章 · 本地占用约 ${(size / 1024).toFixed(1)} KB。` +
     `数据只存在这台设备的 Safari 里，请定期导出备份。`;
 }
 
 /* ===== 设置 ===== */
 function openSettings() {
-  const s = db.settings;
+  const s = getSettings();
   $('cfgBase').value = s.base || '';
   $('cfgKey').value = s.key || '';
   $('cfgModel').value = s.model || '';
@@ -1104,10 +1296,10 @@ function openSettings() {
 }
 
 function readSettings() {
-  db.settings.base = $('cfgBase').value.trim();
-  db.settings.key = $('cfgKey').value.trim();
-  db.settings.model = $('cfgModel').value.trim();
-  db.settings.stylePrompt = $('cfgStyle').value;
+  getSettings().base = $('cfgBase').value.trim();
+  getSettings().key = $('cfgKey').value.trim();
+  getSettings().model = $('cfgModel').value.trim();
+  getSettings().stylePrompt = $('cfgStyle').value;
   saveDB();
 }
 
@@ -1164,7 +1356,7 @@ function initSplitter() {
 
 /* ===== 初始化 ===== */
 function init() {
-  loadDB();
+  loadShelf();
 
   // 章节
   if (db.chapters.length) {
@@ -1239,10 +1431,10 @@ function init() {
   tr.addEventListener('input', () => {
     const v = Number(tr.value) / 100;
     $('tempVal').textContent = v.toFixed(1);
-    db.settings.temperature = v;
+    getSettings().temperature = v;
   });
-  tr.value = String(Math.round((db.settings.temperature || 1) * 100));
-  $('tempVal').textContent = Number(db.settings.temperature || 1).toFixed(1);
+  tr.value = String(Math.round((getSettings().temperature || 1) * 100));
+  $('tempVal').textContent = Number(getSettings().temperature || 1).toFixed(1);
 
   // 摘要
   $('btnGenSummary').addEventListener('click', generateSummary);
@@ -1274,6 +1466,17 @@ function init() {
     const fs = e.target.files;
     if (fs) importChapters(fs);
     e.target.value = '';
+  });
+
+  // 书架
+  $('btnBooks').addEventListener('click', openShelf);
+  $('btnNewBook').addEventListener('click', createBook);
+  $('btnSaveBook').addEventListener('click', saveBookEdit);
+  $('btnDeleteBook').addEventListener('click', () => {
+    if (editingBookId) deleteBook(editingBookId);
+  });
+  $('bookName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveBookEdit(); }
   });
 
   // 历史卡片

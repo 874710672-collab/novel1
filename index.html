@@ -10,13 +10,14 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 
 <!-- ===== 顶栏 ===== -->
 <header class="topbar">
   <button class="tb-btn" id="btnShelf" title="章节">☰</button>
+  <button class="tb-btn" id="btnBooks" title="书架">书</button>
   <div class="tb-title" id="chapterTitle">未选择章节</div>
   <div class="tb-right">
     <button class="tb-btn" id="btnSummary" title="生成摘要">摘</button>
@@ -290,6 +291,34 @@
   </div>
 </div>
 
+<!-- 书架 -->
+<div class="modal" id="modalShelf">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>关闭</button>
+    <span class="modal-title">书架</span>
+    <button class="modal-save" id="btnNewBook">＋ 新书</button>
+  </div>
+  <div class="modal-body">
+    <div class="shelf-list" id="shelfList"></div>
+    <p class="hint">每本书的章节、人设、状态文件、历史卡片互相独立。切换不需要重新登录或填 Key。</p>
+  </div>
+</div>
+
+<!-- 书名编辑 -->
+<div class="modal" id="modalBookEdit">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title" id="bookEditTitle">书名</span>
+    <button class="modal-save" id="btnSaveBook">保存</button>
+  </div>
+  <div class="modal-body">
+    <div class="field"><label>书名</label><input id="bookName" type="text" placeholder="例如：听生物语" maxlength="40"></div>
+    <div class="modal-foot">
+      <button class="ghost-btn danger full" id="btnDeleteBook">删除这本书</button>
+    </div>
+  </div>
+</div>
+
 <!-- 确认弹窗 -->
 <div class="modal modal-small" id="modalConfirm">
   <div class="modal-body confirm-body">
@@ -358,6 +387,7 @@
 <script src="confirm.js?v=1"></script>
 <script src="cast.js?v=4"></script>
 <script src="history.js?v=1"></script>
-<script src="app.js?v=10"></script>
+<script src="shelf.js?v=1"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
