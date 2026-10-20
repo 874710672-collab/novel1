@@ -1,6 +1,6 @@
 const CACHE = 'novel-draw-v1';
 const ASSETS = [
-  './', './index.html', './style.css', './app.js', './prompts.js',
+  './', './index.html', './style.css', './app.js', './prompts.js', './confirm.js',
   './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'
 ];
 

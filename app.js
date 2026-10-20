@@ -127,7 +127,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm'];
 let openModalId = null;
 
 function openModal(id) {
@@ -181,22 +181,112 @@ function renderChapterList() {
     const el = document.createElement('div');
     el.className = 'chapter-item' + (c.id === currentChapterId ? ' on' : '');
     const sumMark = c.summary ? ' · 有摘要' : '';
-    el.innerHTML = `
-      <span class="ch-no">${String(c.no).padStart(2, '0')}</span>
-      <span class="ch-title">${escapeHtml(c.title || '未命名')}</span>
-      <span class="ch-meta">${countWords(c.body)}字${sumMark}</span>
-      <span class="ch-del" data-del="${c.id}">×</span>`;
-    el.addEventListener('click', e => {
-      if (e.target.dataset.del) {
-        e.stopPropagation();
-        removeChapter(e.target.dataset.del);
-        return;
-      }
+
+    const noSpan = document.createElement('span');
+    noSpan.className = 'ch-no';
+    noSpan.textContent = String(c.no).padStart(2, '0');
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'ch-title';
+    titleSpan.textContent = c.title || '未命名';
+    titleSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      openChapterInfo(c.id);
+    });
+
+    const metaSpan = document.createElement('span');
+    metaSpan.className = 'ch-meta';
+    metaSpan.textContent = countWords(c.body) + '字' + sumMark;
+
+    const editSpan = document.createElement('span');
+    editSpan.className = 'ch-edit';
+    editSpan.textContent = '✎';
+    editSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      openChapterInfo(c.id);
+    });
+
+    const delSpan = document.createElement('span');
+    delSpan.className = 'ch-del';
+    delSpan.textContent = '×';
+    delSpan.addEventListener('click', e => {
+      e.stopPropagation();
+      removeChapter(c.id);
+    });
+
+    el.appendChild(noSpan);
+    el.appendChild(titleSpan);
+    el.appendChild(metaSpan);
+    el.appendChild(editSpan);
+    el.appendChild(delSpan);
+
+    el.addEventListener('click', () => {
       selectChapter(c.id);
       closeDrawer();
     });
     list.appendChild(el);
   }
+}
+
+/* ===== 重新编号 ===== */
+async function renumberChapters() {
+  const sorted = [...db.chapters].sort((a, b) => a.no - b.no);
+  if (!sorted.length) { toast('没有章节'); return; }
+  const ok = await askConfirm(
+    '按顺序重新编号？',
+    `当前 ${sorted.length} 章会按现有顺序改成 1 到 ${sorted.length}。如果某章摘要或状态文件里提到旧章号，需要你自己核对。`,
+    '重新编号'
+  );
+  if (!ok) return;
+  sorted.forEach((c, i) => { c.no = i + 1; c.updatedAt = Date.now(); });
+  db.chapters = sorted;
+  saveDB();
+  renderChapterList();
+  renderCtxLists();
+  const cur = currentChapter();
+  if (cur) $('chapterTitle').textContent = `第${cur.no}章 · ${cur.title || '未命名'}`;
+  toast('已重新编号');
+}
+
+/* ===== 章节信息编辑 ===== */
+let editingChapterId = null;
+
+function openChapterInfo(id) {
+  const c = db.chapters.find(x => x.id === id);
+  if (!c) return;
+  editingChapterId = id;
+  $('chapterInfoTitle').textContent = '章节信息';
+  $('chNo').value = c.no;
+  $('chName').value = c.title || '';
+  openModal('modalChapterInfo');
+  setTimeout(() => $('chName').focus(), 320);
+}
+
+function saveChapterInfo() {
+  const c = db.chapters.find(x => x.id === editingChapterId);
+  if (!c) return;
+
+  const no = parseInt($('chNo').value, 10);
+  if (!(no > 0)) { toast('章号要大于 0'); return; }
+
+  const dup = db.chapters.find(x => x.id !== c.id && x.no === no);
+  if (dup) { toast(`第${no}章已存在`); return; }
+
+  c.no = no;
+  c.title = $('chName').value.trim() || '未命名';
+  c.updatedAt = Date.now();
+
+  // 正文有改动而摘要未更新时提示
+  db.chapters.sort((a, b) => a.no - b.no);
+  saveDB();
+  renderChapterList();
+  renderCtxLists();
+  if (currentChapterId === c.id) {
+    $('chapterTitle').textContent = `第${c.no}章 · ${c.title}`;
+    $('chapterTitle').classList.add('editable');
+  }
+  closeModal();
+  toast('已保存');
 }
 
 function escapeHtml(s) {
@@ -209,8 +299,10 @@ function selectChapter(id) {
   currentChapterId = id;
   const c = currentChapter();
   $('chapterTitle').textContent = c ? `第${c.no}章 · ${c.title || '未命名'}` : '未选择章节';
+  $('chapterTitle').classList.toggle('editable', !!c);
   $('editor').value = c ? c.body : '';
   updateWordCount();
+  updateStaleBadge();
   renderChapterList();
   renderCtxChips();
 }
@@ -227,6 +319,26 @@ function flushEditor() {
     c.updatedAt = Date.now();
     saveDB();
     renderChapterList();
+    updateStaleBadge();
+  }
+}
+
+/* 摘要是否可能过期：有摘要，且正文改过之后摘要没重新生成 */
+function isSummaryStale(c) {
+  if (!c || !c.summary || !c.summary.trim()) return false;
+  if (!c.summaryAt) return false;
+  return (c.updatedAt || 0) > c.summaryAt + 3000;
+}
+
+function updateStaleBadge() {
+  const c = currentChapter();
+  const badge = $('staleBadge');
+  if (!badge) return;
+  if (isSummaryStale(c)) {
+    badge.hidden = false;
+    badge.textContent = '正文已改动，摘要可能过期';
+  } else {
+    badge.hidden = true;
   }
 }
 
@@ -249,13 +361,22 @@ function newChapter() {
   saveDB();
   selectChapter(ch.id);
   closeDrawer();
-  toast(`已新建第${ch.no}章`);
+  // 直接弹出命名，方便起名
+  openChapterInfo(ch.id);
 }
 
-function removeChapter(id) {
+async function removeChapter(id) {
   const c = db.chapters.find(x => x.id === id);
   if (!c) return;
-  if (!confirm(`删除第${c.no}章「${c.title || '未命名'}」？正文和摘要都会一起删掉。`)) return;
+
+  const words = countWords(c.body);
+  const hasSum = c.summary && c.summary.trim();
+  const desc = `第${c.no}章「${c.title || '未命名'}」的正文（${words}字）` +
+    (hasSum ? '和摘要' : '') + '会被一起删除，无法恢复。';
+
+  const ok = await askConfirm('删除这一章？', desc, '删除');
+  if (!ok) return;
+
   db.chapters = db.chapters.filter(x => x.id !== id);
   db.ctx.summaryIds = db.ctx.summaryIds.filter(x => x !== id);
   db.ctx.fullIds = db.ctx.fullIds.filter(x => x !== id);
@@ -263,6 +384,7 @@ function removeChapter(id) {
     currentChapterId = null;
     $('editor').value = '';
     $('chapterTitle').textContent = '未选择章节';
+    $('chapterTitle').classList.remove('editable');
     updateWordCount();
   }
   saveDB();
@@ -378,7 +500,7 @@ function buildContext() {
   if (db.ctx.summaryIds.length) {
     const sums = sorted
       .filter(c => db.ctx.summaryIds.includes(c.id) && c.summary && c.summary.trim())
-      .map(c => `—— 第${c.no}章摘要 ——\n${c.summary.trim()}`)
+      .map(c => `—— 第${c.no}章${c.title && c.title !== '未命名' ? '·' + c.title : ''} 摘要 ——\n${c.summary.trim()}`)
       .join('\n\n');
     if (sums) parts.push('【前情摘要】\n' + sums);
   }
@@ -386,7 +508,7 @@ function buildContext() {
   if (db.ctx.fullIds.length) {
     const refs = sorted
       .filter(c => db.ctx.fullIds.includes(c.id) && c.body && c.body.trim())
-      .map(c => `—— 第${c.no}章正文 ——\n${c.body.trim()}`)
+      .map(c => `—— 第${c.no}章${c.title && c.title !== '未命名' ? '·' + c.title : ''} 正文 ——\n${c.body.trim()}`)
       .join('\n\n');
     if (refs) parts.push('【原文参考】\n' + refs);
   }
@@ -642,7 +764,7 @@ function saveSummary() {
   const text = $('summaryOut').value.trim();
   if (!text) { toast('摘要为空'); return; }
   c.summary = text;
-  c.updatedAt = Date.now();
+  c.summaryAt = Date.now();
   saveDB();
   renderChapterList();
   closeModal();
@@ -660,7 +782,7 @@ function buildStateMessages() {
   if (!withSum.length) throw new Error('还没有任何章节摘要，先去生成摘要');
 
   if (stateMode === 'init') {
-    const body = withSum.map(c => `—— 第${c.no}章摘要 ——\n${c.summary.trim()}`).join('\n\n');
+    const body = withSum.map(c => `—— 第${c.no}章${c.title && c.title !== '未命名' ? '·' + c.title : ''} 摘要 ——\n${c.summary.trim()}`).join('\n\n');
     return {
       system: '当前模式：模式A（首次生成）\n\n' + STATE_PROMPT_BODY,
       user: `请根据以下章节摘要，生成完整的初始状态文件。\n\n${body}`
@@ -673,7 +795,7 @@ function buildStateMessages() {
   }
   return {
     system: '当前模式：模式B（增量更新）\n\n' + STATE_PROMPT_BODY,
-    user: `【现有状态文件】\n${db.stateFile.trim()}\n\n【最新一章摘要】\n第${latest.no}章\n${latest.summary.trim()}\n\n请输出更新后的完整状态文件。`
+    user: `【现有状态文件】\n${db.stateFile.trim()}\n\n【最新一章摘要】\n第${latest.no}章${latest.title && latest.title !== '未命名' ? '·' + latest.title : ''}\n${latest.summary.trim()}\n\n请输出更新后的完整状态文件。`
   };
 }
 
@@ -1010,6 +1132,25 @@ function init() {
     const fs = e.target.files;
     if (fs) importChapters(fs);
     e.target.value = '';
+  });
+
+  // 确认框
+  $('btnConfirmYes').addEventListener('click', () => settleConfirm(true));
+  $('btnConfirmNo').addEventListener('click', () => settleConfirm(false));
+
+  // 重新编号
+  $('btnRenumber').addEventListener('click', renumberChapters);
+
+  // 顶栏标题点击改名
+  $('chapterTitle').addEventListener('click', () => {
+    if (!currentChapterId) { toast('先选一章'); return; }
+    openChapterInfo(currentChapterId);
+  });
+
+  // 章节信息
+  $('btnSaveChapterInfo').addEventListener('click', saveChapterInfo);
+  $('chName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveChapterInfo(); }
   });
 
   // 上下文开关

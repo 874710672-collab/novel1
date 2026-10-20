@@ -10,7 +10,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -32,6 +32,7 @@
   <section class="pane pane-edit" id="paneEdit">
     <div class="pane-head">
       <span class="pane-label">正文编辑</span>
+      <span class="stale-badge" id="staleBadge" hidden></span>
       <span class="wordcount" id="wordCount">0 字</span>
     </div>
     <textarea id="editor" class="editor" placeholder="在这里写正文，或从「章节」里选一章开始……"></textarea>
@@ -86,6 +87,7 @@
     <div class="drawer-actions">
       <button class="mini-btn" id="btnNewChapter">＋ 新建</button>
       <button class="mini-btn" id="btnImportChapters">导入</button>
+      <button class="mini-btn" id="btnRenumber" title="按顺序重新编号">⇅</button>
     </div>
   </div>
   <div class="chapter-list" id="chapterList"></div>
@@ -160,6 +162,32 @@
   </div>
 </div>
 
+<!-- 确认弹窗 -->
+<div class="modal modal-small" id="modalConfirm">
+  <div class="modal-body confirm-body">
+    <div class="confirm-title" id="confirmTitle">确认删除</div>
+    <div class="confirm-desc" id="confirmDesc"></div>
+    <div class="confirm-actions">
+      <button class="ghost-btn" id="btnConfirmNo">取消</button>
+      <button class="ghost-btn danger" id="btnConfirmYes">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 章节信息弹窗 -->
+<div class="modal" id="modalChapterInfo">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title" id="chapterInfoTitle">章节信息</span>
+    <button class="modal-save" id="btnSaveChapterInfo">保存</button>
+  </div>
+  <div class="modal-body">
+    <div class="field"><label>章号</label><input id="chNo" type="number" min="1" inputmode="numeric"></div>
+    <div class="field"><label>章名</label><input id="chName" type="text" placeholder="例如：夜班" maxlength="40"></div>
+    <p class="hint">章名会出现在章节列表、顶部标题，以及抽卡时发给 AI 的上下文里。</p>
+  </div>
+</div>
+
 <!-- 上下文弹窗 -->
 <div class="modal" id="modalContext">
   <div class="modal-head">
@@ -193,6 +221,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="prompts.js?v=1"></script>
-<script src="app.js?v=3"></script>
+<script src="confirm.js?v=1"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

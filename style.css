@@ -54,7 +54,18 @@ textarea{resize:none;}
 .tb-title{
   flex:1 1 auto;text-align:center;
   font-size:14.5px;font-weight:600;
+  padding:6px 12px;
+  border-radius:9px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background .15s;
+}
+.tb-title.editable:active{background:var(--panel-2);}
+.tb-title.editable::after{
+  content:'✎';
+  font-size:11px;
+  font-weight:400;
+  opacity:.45;
+  margin-left:6px;
 }
 .tb-right{display:flex;gap:6px;flex:0 0 auto;}
 
@@ -80,10 +91,26 @@ textarea{resize:none;}
   height:38px;
   display:flex;align-items:center;justify-content:space-between;
   padding:0 14px;
+  gap:8px;
   border-bottom:1px solid var(--line);
 }
-.pane-label{font-size:11.5px;letter-spacing:.09em;color:var(--text-3);}
-.wordcount{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.pane-label{font-size:11.5px;letter-spacing:.09em;color:var(--text-3);flex:0 0 auto;}
+.stale-badge{
+  font-size:10.5px;
+  color:var(--warm);
+  background:rgba(255,184,122,.12);
+  padding:3px 8px;
+  border-radius:99px;
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+.wordcount{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;flex:0 0 auto;margin-left:auto;}
+
+.ch-edit{
+  font-size:13px;color:var(--text-3);
+  padding:0 5px;flex:0 0 auto;
+}
+.ch-edit:active{color:var(--accent);}
 .mini-btn{
   font-size:12px;padding:5px 10px;border-radius:8px;
   background:var(--panel);color:var(--text-2);
@@ -416,6 +443,28 @@ textarea{resize:none;}
 .ghost-btn:active{background:var(--panel-2);}
 .ghost-btn.full{width:100%;display:block;margin-top:8px;}
 .data-actions{display:flex;gap:8px;margin-top:8px;}
+
+/* 确认框 */
+.modal-small{max-height:none;}
+.confirm-body{padding:22px 20px calc(20px + var(--safe-b));}
+.confirm-title{font-size:16px;font-weight:600;margin-bottom:8px;}
+.confirm-desc{font-size:13.5px;color:var(--text-2);line-height:1.7;margin-bottom:20px;}
+.confirm-actions{display:flex;gap:9px;}
+.ghost-btn.danger{
+  background:rgba(255,112,112,.12);
+  color:var(--danger);
+  font-weight:600;
+}
+.ghost-btn.danger:active{background:rgba(255,112,112,.2);}
+
+#modalConfirm{
+  left:0;right:0;
+  margin:0 auto;
+  width:min(440px,90vw);
+  bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  border-radius:18px;
+  max-height:none;
+}
 
 .toast{
   position:fixed;left:50%;bottom:calc(30px + var(--safe-b));
