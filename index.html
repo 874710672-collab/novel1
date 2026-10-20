@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="抽卡写小说">
+<meta name="theme-color" content="#111013">
+<title>抽卡写小说</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css?v=6">
+</head>
+<body>
+
+<!-- ===== 顶栏 ===== -->
+<header class="topbar">
+  <button class="tb-btn" id="btnShelf" title="章节">☰</button>
+  <div class="tb-title" id="chapterTitle">未选择章节</div>
+  <div class="tb-right">
+    <button class="tb-btn" id="btnSummary" title="生成摘要">摘</button>
+    <button class="tb-btn" id="btnState" title="状态文件">态</button>
+    <button class="tb-btn" id="btnSettings" title="设置">⚙</button>
+  </div>
+</header>
+
+<!-- ===== 主区：左右分屏 ===== -->
+<main class="workspace" id="workspace">
+
+  <!-- 左：编辑区 -->
+  <section class="pane pane-edit" id="paneEdit">
+    <div class="pane-head">
+      <span class="pane-label">正文编辑</span>
+      <span class="wordcount" id="wordCount">0 字</span>
+    </div>
+    <textarea id="editor" class="editor" placeholder="在这里写正文，或从「章节」里选一章开始……"></textarea>
+  </section>
+
+  <!-- 分隔条 -->
+  <div class="splitter" id="splitter"><div class="splitter-grip"></div></div>
+
+  <!-- 右：抽卡区 -->
+  <section class="pane pane-draw" id="paneDraw">
+    <div class="pane-head">
+      <span class="pane-label">抽卡</span>
+      <button class="mini-btn" id="btnContext" title="上下文">上下文</button>
+    </div>
+
+    <div class="ctx-chips" id="ctxChips"></div>
+
+    <div class="prompt-box">
+      <textarea id="promptInput" class="prompt-input" placeholder="写点什么……&#10;提示：这是唯一必填项"></textarea>
+    </div>
+
+    <div class="draw-params">
+      <div class="param">
+        <span class="param-label">张数</span>
+        <div class="seg" id="segCount">
+          <button data-n="1" class="on">1</button>
+          <button data-n="2">2</button>
+          <button data-n="3">3</button>
+          <button data-n="4">4</button>
+        </div>
+      </div>
+      <label class="param param-temp">
+        <span class="param-label">温度</span>
+        <input type="range" id="tempRange" min="0" max="200" value="100">
+        <span class="param-val" id="tempVal">1.0</span>
+      </label>
+    </div>
+
+    <button class="draw-btn" id="btnDraw">
+      <span class="draw-btn-text">抽 卡</span>
+    </button>
+
+    <div class="cards" id="cards"></div>
+  </section>
+</main>
+
+<!-- ===== 章节抽屉 ===== -->
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawerShelf">
+  <div class="drawer-head">
+    <span>章节</span>
+    <div class="drawer-actions">
+      <button class="mini-btn" id="btnNewChapter">＋ 新建</button>
+      <button class="mini-btn" id="btnImportChapters">导入</button>
+    </div>
+  </div>
+  <div class="chapter-list" id="chapterList"></div>
+</aside>
+
+<!-- ===== 通用弹窗容器 ===== -->
+<div class="modal-mask" id="modalMask"></div>
+
+<!-- 摘要弹窗 -->
+<div class="modal" id="modalSummary">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title">生成摘要</span>
+    <button class="modal-save" id="btnGenSummary">生成</button>
+  </div>
+  <div class="modal-body">
+    <p class="hint">将把「当前章节正文」发给 AI，按内置模板生成结构化摘要。生成后可编辑，确认后才保存。</p>
+    <textarea id="summaryOut" class="big-area" placeholder="生成结果会出现在这里……"></textarea>
+    <div class="modal-foot">
+      <button class="ghost-btn" id="btnSaveSummary">保存为本章摘要</button>
+    </div>
+  </div>
+</div>
+
+<!-- 状态文件弹窗 -->
+<div class="modal" id="modalState">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title">故事状态文件</span>
+    <button class="modal-save" id="btnUpdateState">按最新章更新</button>
+  </div>
+  <div class="modal-body">
+    <p class="hint">「首次生成」用全部摘要建立状态文件；「按最新章更新」只喂现有状态 + 最新一章摘要。</p>
+    <div class="seg seg-wide" id="segStateMode">
+      <button data-mode="init" class="on">首次生成</button>
+      <button data-mode="incr">按最新章更新</button>
+    </div>
+    <textarea id="stateOut" class="big-area tall" placeholder="状态文件内容……"></textarea>
+    <div class="modal-foot">
+      <button class="ghost-btn" id="btnSaveState">保存状态文件</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal" id="modalSettings">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>完成</button>
+    <span class="modal-title">设置</span>
+    <span class="modal-save-space"></span>
+  </div>
+  <div class="modal-body">
+    <div class="field"><label>接口地址</label><input id="cfgBase" placeholder="https://api.deepseek.com/v1"></div>
+    <div class="field"><label>API Key</label><input id="cfgKey" type="password" placeholder="sk-..."></div>
+    <div class="field"><label>模型</label><input id="cfgModel" placeholder="deepseek-chat"></div>
+    <button class="ghost-btn full" id="btnTest">测试连接</button>
+
+    <div class="section-title">文风要求（每次抽卡都会带上）</div>
+    <textarea id="cfgStyle" class="big-area"></textarea>
+
+    <div class="section-title">数据</div>
+    <div class="data-actions">
+      <button class="ghost-btn" id="btnExportAll">导出全部备份</button>
+      <button class="ghost-btn" id="btnImportAll">导入备份</button>
+    </div>
+    <div class="data-actions">
+      <button class="ghost-btn" id="btnExportMd">导出章节 md</button>
+    </div>
+    <input type="file" id="fileBackup" accept=".json" hidden>
+    <input type="file" id="fileChapters" accept=".md,.txt,.text" multiple hidden>
+    <div class="hint" id="storageHint"></div>
+  </div>
+</div>
+
+<!-- 上下文弹窗 -->
+<div class="modal" id="modalContext">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>完成</button>
+    <span class="modal-title">上下文选择</span>
+    <span class="modal-save-space"></span>
+  </div>
+  <div class="modal-body">
+    <div class="switch-row">
+      <span>文风要求</span>
+      <input type="checkbox" id="ctxStyle" checked>
+    </div>
+    <div class="switch-row">
+      <span>故事状态文件</span>
+      <input type="checkbox" id="ctxState" checked>
+    </div>
+    <div class="switch-row">
+      <span>当前章节正文</span>
+      <input type="checkbox" id="ctxEditor" checked>
+    </div>
+
+    <div class="section-title">章节摘要（可多选）</div>
+    <div class="ctx-list" id="ctxSummaryList"></div>
+
+    <div class="section-title">章节全文（可多选）</div>
+    <div class="ctx-list" id="ctxFullList"></div>
+    <p class="hint">勾选会被记住，下次打开抽卡台仍然生效。</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="prompts.js?v=1"></script>
+<script src="app.js?v=3"></script>
+</body>
+</html>
