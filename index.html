@@ -10,7 +10,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
@@ -20,6 +20,7 @@
   <div class="tb-title" id="chapterTitle">未选择章节</div>
   <div class="tb-right">
     <button class="tb-btn" id="btnSummary" title="生成摘要">摘</button>
+    <button class="tb-btn" id="btnCast" title="人设库">人</button>
     <button class="tb-btn" id="btnState" title="状态文件">态</button>
     <button class="tb-btn" id="btnSettings" title="设置">⚙</button>
   </div>
@@ -162,6 +163,116 @@
   </div>
 </div>
 
+<!-- 人设库弹窗 -->
+<div class="modal" id="modalCast">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>关闭</button>
+    <span class="modal-title">人设库</span>
+    <button class="modal-save" id="btnAddChar">＋ 人物</button>
+  </div>
+  <div class="modal-body">
+    <div class="seg seg-wide" id="segCastTab">
+      <button data-tab="char" class="on">人物</button>
+      <button data-tab="world">世界观</button>
+    </div>
+
+    <!-- 人物列表 -->
+    <div id="castCharPane">
+      <div class="cast-actions">
+        <button class="mini-btn" id="btnExtractChar">从勾选章节提取人物</button>
+      </div>
+      <div class="cast-list" id="castCharList"></div>
+    </div>
+
+    <!-- 世界观列表 -->
+    <div id="castWorldPane" hidden>
+      <div class="cast-actions">
+        <button class="mini-btn" id="btnNewWorld">＋ 新建条目</button>
+      </div>
+      <div class="cast-list" id="castWorldList"></div>
+    </div>
+
+    <p class="hint" id="castHint">人物和世界观可以手动编辑，也可以让 AI 从勾选的章节里提取。抽卡时在「上下文」里勾选要带上的条目。</p>
+  </div>
+</div>
+
+<!-- 人物编辑弹窗 -->
+<div class="modal" id="modalCharEdit">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title" id="charEditTitle">人物</span>
+    <button class="modal-save" id="btnSaveChar">保存</button>
+  </div>
+  <div class="modal-body">
+    <div class="field"><label>姓名</label><input id="charName" type="text" placeholder="例如：林默" maxlength="30"></div>
+    <div class="field"><label>身份</label><input id="charRole" type="text" placeholder="例如：快递员" maxlength="30"></div>
+    <div class="field"><label>又名</label><input id="charAlias" type="text" placeholder="昭昭、许二（用顿号或逗号分隔）" maxlength="80"></div>
+    <p class="hint" style="margin:-2px 0 12px">AI 提取时，只要名字命中姓名或任一别名，就认为是同一个人。</p>
+    <div class="section-title">人设内容</div>
+    <textarea id="charBody" class="big-area tall" placeholder="外貌、性格、说话方式、当前处境、与其他角色的关系……"></textarea>
+    <div class="modal-foot">
+      <button class="ghost-btn danger full" id="btnDeleteChar">删除这个人物</button>
+    </div>
+  </div>
+</div>
+
+<!-- 世界观编辑弹窗 -->
+<div class="modal" id="modalWorldEdit">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title">世界观条目</span>
+    <button class="modal-save" id="btnSaveWorld">保存</button>
+  </div>
+  <div class="modal-body">
+    <div class="field"><label>条目标题</label><input id="worldTitle" type="text" placeholder="例如：修炼体系" maxlength="40"></div>
+    <textarea id="worldBody" class="big-area tall" placeholder="这一条设定的具体内容……"></textarea>
+    <div class="modal-foot">
+      <button class="ghost-btn danger full" id="btnDeleteWorld">删除这个条目</button>
+    </div>
+  </div>
+</div>
+
+<!-- 提取人物：选章节 -->
+<div class="modal" id="modalExtractPick">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title">从哪些章节提取</span>
+    <button class="modal-save" id="btnDoExtract">提取</button>
+  </div>
+  <div class="modal-body">
+    <div class="ctx-list" id="extractChapterList"></div>
+    <p class="hint">勾选的章节正文会发给 AI。这里的选择是独立的，不会影响抽卡时的上下文勾选。</p>
+  </div>
+</div>
+
+<!-- 提取结果：确认合并 -->
+<div class="modal" id="modalExtractReview">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title">确认提取结果</span>
+    <button class="modal-save" id="btnApplyExtract">应用</button>
+  </div>
+  <div class="modal-body">
+    <p class="hint" id="extractSummaryText"></p>
+    <div id="extractReviewList"></div>
+  </div>
+</div>
+
+<!-- 选择合并目标 -->
+<div class="modal" id="modalPickTarget">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title" id="pickTargetTitle">合并到…</span>
+    <span class="modal-save-space"></span>
+  </div>
+  <div class="modal-body">
+    <div class="pick-search-wrap">
+      <input id="pickSearch" class="pick-search" type="text" placeholder="搜索姓名、别名或身份" autocomplete="off">
+    </div>
+    <div class="pick-list" id="pickTargetList"></div>
+  </div>
+</div>
+
 <!-- 确认弹窗 -->
 <div class="modal modal-small" id="modalConfirm">
   <div class="modal-body confirm-body">
@@ -209,6 +320,12 @@
       <input type="checkbox" id="ctxEditor" checked>
     </div>
 
+    <div class="section-title">人物人设（可多选）</div>
+    <div class="ctx-list" id="ctxCharList"></div>
+
+    <div class="section-title">世界观（可多选）</div>
+    <div class="ctx-list" id="ctxWorldList"></div>
+
     <div class="section-title">章节摘要（可多选）</div>
     <div class="ctx-list" id="ctxSummaryList"></div>
 
@@ -222,6 +339,7 @@
 
 <script src="prompts.js?v=1"></script>
 <script src="confirm.js?v=1"></script>
-<script src="app.js?v=6"></script>
+<script src="cast.js?v=4"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

@@ -18,13 +18,22 @@ function defaultDB() {
       temperature: 1.0,
       stylePrompt: (typeof DEFAULT_STYLE_PROMPT !== 'undefined' ? DEFAULT_STYLE_PROMPT : '')
     },
+    lastChapterId: null,   // 上次打开的章节
+
+    // 人物人设库 {id, name, role, body}
+    characters: [],
+    // 世界观条目库 {id, title, body}
+    worldEntries: [],
+
     // 抽卡上下文勾选状态（持久化）
     ctx: {
       style: true,
       state: true,
       editor: true,
       summaryIds: [],
-      fullIds: []
+      fullIds: [],
+      charIds: [],
+      worldIds: []
     }
   };
 }
@@ -127,7 +136,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget'];
 let openModalId = null;
 
 function openModal(id) {
@@ -297,6 +306,8 @@ function escapeHtml(s) {
 function selectChapter(id) {
   flushEditor();
   currentChapterId = id;
+  db.lastChapterId = id;
+  saveDB();
   const c = currentChapter();
   $('chapterTitle').textContent = c ? `第${c.no}章 · ${c.title || '未命名'}` : '未选择章节';
   $('chapterTitle').classList.toggle('editable', !!c);
@@ -422,6 +433,19 @@ function renderCtxChips() {
     box.appendChild(el);
   }
 
+  if (db.ctx.charIds && db.ctx.charIds.length) {
+    const el = document.createElement('span');
+    el.className = 'chip on';
+    el.textContent = `人设 ×${db.ctx.charIds.length}`;
+    box.appendChild(el);
+  }
+  if (db.ctx.worldIds && db.ctx.worldIds.length) {
+    const el = document.createElement('span');
+    el.className = 'chip on';
+    el.textContent = `世界观 ×${db.ctx.worldIds.length}`;
+    box.appendChild(el);
+  }
+
   if (db.ctx.summaryIds.length) {
     const el = document.createElement('span');
     el.className = 'chip on';
@@ -439,6 +463,31 @@ function renderCtxChips() {
 /* ===== 上下文弹窗 ===== */
 function renderCtxLists() {
   const sorted = [...db.chapters].sort((a, b) => a.no - b.no);
+
+  // 人物人设
+  const cw = $('ctxCharList');
+  cw.innerHTML = '';
+  if (!db.characters.length) {
+    cw.innerHTML = '<div class="ctx-empty">还没有人物，点顶部「人」去建</div>';
+  } else {
+    for (const ch of db.characters) {
+      cw.appendChild(makeSimpleCtxRow(
+        ch.name + (ch.role ? `（${ch.role}）` : ''),
+        'charIds', ch.id
+      ));
+    }
+  }
+
+  // 世界观
+  const ww = $('ctxWorldList');
+  ww.innerHTML = '';
+  if (!db.worldEntries.length) {
+    ww.innerHTML = '<div class="ctx-empty">还没有世界观条目</div>';
+  } else {
+    for (const w of db.worldEntries) {
+      ww.appendChild(makeSimpleCtxRow(w.title, 'worldIds', w.id));
+    }
+  }
 
   const sumWrap = $('ctxSummaryList');
   sumWrap.innerHTML = '';
@@ -460,6 +509,28 @@ function renderCtxLists() {
       fullWrap.appendChild(makeCtxRow(c, 'fullIds'));
     }
   }
+}
+
+function makeSimpleCtxRow(labelText, field, id) {
+  const label = document.createElement('label');
+  label.className = 'ctx-item';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  if (!db.ctx[field]) db.ctx[field] = [];
+  cb.checked = db.ctx[field].includes(id);
+  cb.addEventListener('change', () => {
+    const arr = db.ctx[field];
+    const i = arr.indexOf(id);
+    if (cb.checked && i < 0) arr.push(id);
+    if (!cb.checked && i >= 0) arr.splice(i, 1);
+    saveDB();
+    renderCtxChips();
+  });
+  const span = document.createElement('span');
+  span.textContent = labelText;
+  label.appendChild(cb);
+  label.appendChild(span);
+  return label;
 }
 
 function makeCtxRow(c, field) {
@@ -493,6 +564,26 @@ function buildContext() {
 
   if (db.ctx.state && db.stateFile.trim()) {
     parts.push('【故事状态文件】\n' + db.stateFile.trim());
+  }
+
+  // 人物人设
+  if (db.ctx.charIds && db.ctx.charIds.length) {
+    const chars = db.characters.filter(c => db.ctx.charIds.includes(c.id));
+    if (chars.length) {
+      const txt = chars.map(c =>
+        `—— ${c.name}${c.role ? '（' + c.role + '）' : ''} ——\n${(c.body || '').trim()}`
+      ).join('\n\n');
+      parts.push('【人物人设】\n' + txt);
+    }
+  }
+
+  // 世界观
+  if (db.ctx.worldIds && db.ctx.worldIds.length) {
+    const we = db.worldEntries.filter(w => db.ctx.worldIds.includes(w.id));
+    if (we.length) {
+      const txt = we.map(w => `—— ${w.title} ——\n${(w.body || '').trim()}`).join('\n\n');
+      parts.push('【世界观设定】\n' + txt);
+    }
   }
 
   const sorted = [...db.chapters].sort((a, b) => a.no - b.no);
@@ -727,6 +818,7 @@ async function doDraw() {
 
 /* ===== 摘要生成 ===== */
 let summaryAbort = null;
+let pendingSummaryTitle = '';
 
 async function generateSummary() {
   flushEditor();
@@ -747,6 +839,7 @@ async function generateSummary() {
       summaryAbort.signal
     );
     $('summaryOut').value = out;
+    pendingSummaryTitle = parseTitleFromSummary(out);
     toast('摘要已生成，请检查后保存');
   } catch (e) {
     $('summaryOut').value = '';
@@ -758,17 +851,45 @@ async function generateSummary() {
   }
 }
 
+/* 从摘要里解析出 AI 拟的章名，例如 "第12章·拍卖会残剑" → "拍卖会残剑" */
+function parseTitleFromSummary(text) {
+  if (!text) return '';
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  // 找到「一、章节编号与标题」后面那行
+  let idx = lines.findIndex(l => /章节编号与标题/.test(l));
+  let line = idx >= 0 && lines[idx + 1] ? lines[idx + 1] : lines[0] || '';
+  // 去掉序号和「第N章·」前缀
+  line = line.replace(/^[一二三四五六七八九十]+[、.．]\s*/, '');
+  line = line.replace(/^第\s*\d+\s*章\s*[·・\-—:：.、]?\s*/, '');
+  line = line.replace(/^[·・\-—:：.、\s]+/, '').trim();
+  if (!line || line.length > 20) return '';
+  return line;
+}
+
 function saveSummary() {
   const c = currentChapter();
   if (!c) { toast('没有选中章节'); return; }
   const text = $('summaryOut').value.trim();
   if (!text) { toast('摘要为空'); return; }
+
   c.summary = text;
   c.summaryAt = Date.now();
+
+  // 同步章名：AI 拟了名字，且作者没手动改过章名，就自动采用
+  const aiTitle = pendingSummaryTitle || parseTitleFromSummary(text);
+  const isUntitled = !c.title || c.title === '未命名' || c.title.trim() === '';
+  const autoSynced = isUntitled && !!aiTitle;
+  if (autoSynced) {
+    c.title = aiTitle;
+    $('chapterTitle').textContent = `第${c.no}章 · ${c.title}`;
+    $('chapterTitle').classList.add('editable');
+  }
+
+  pendingSummaryTitle = '';
   saveDB();
   renderChapterList();
   closeModal();
-  toast('摘要已保存');
+  toast(autoSynced ? `摘要已保存，章名同步为「${c.title}」` : '摘要已保存');
 }
 
 /* ===== 状态文件 ===== */
@@ -1035,7 +1156,15 @@ function init() {
 
   // 章节
   if (db.chapters.length) {
-    selectChapter([...db.chapters].sort((a, b) => a.no - b.no)[0].id);
+    // 优先恢复上次打开的章节；不存在则取最新一章
+    const last = db.chapters.find(c => c.id === db.lastChapterId);
+    const target = last || [...db.chapters].sort((a, b) => b.no - a.no)[0];
+    selectChapter(target.id);
+    // 章节列表滚动到当前章
+    setTimeout(() => {
+      const on = document.querySelector('.chapter-item.on');
+      if (on) on.scrollIntoView({ block: 'center' });
+    }, 60);
   } else {
     $('chapterTitle').textContent = '未选择章节';
   }
@@ -1062,6 +1191,7 @@ function init() {
     const c = currentChapter();
     $('summaryOut').value = c && c.summary ? c.summary : '';
     $('btnGenSummary').textContent = '生成';
+    pendingSummaryTitle = '';
     openModal('modalSummary');
   });
 
@@ -1132,6 +1262,31 @@ function init() {
     const fs = e.target.files;
     if (fs) importChapters(fs);
     e.target.value = '';
+  });
+
+  // 人设库
+  $('btnCast').addEventListener('click', openCast);
+  document.querySelectorAll('#segCastTab button').forEach(b => {
+    b.addEventListener('click', () => switchCastTab(b.dataset.tab));
+  });
+  $('btnAddChar').addEventListener('click', () => {
+    switchCastTab('char');
+    openCharEdit(null);
+  });
+  $('btnNewWorld').addEventListener('click', () => {
+    switchCastTab('world');
+    openWorldEdit(null);
+  });
+  $('btnSaveChar').addEventListener('click', saveCharacter);
+  $('btnDeleteChar').addEventListener('click', () => editingCharId && deleteCharacter(editingCharId));
+  $('btnSaveWorld').addEventListener('click', saveWorld);
+  $('btnDeleteWorld').addEventListener('click', () => editingWorldId && deleteWorld(editingWorldId));
+  $('btnExtractChar').addEventListener('click', openExtractPick);
+  $('btnDoExtract').addEventListener('click', runExtract);
+  $('btnApplyExtract').addEventListener('click', applyExtract);
+  $('pickSearch').addEventListener('input', e => {
+    pickQuery = e.target.value;
+    renderPickTarget();
   });
 
   // 确认框
