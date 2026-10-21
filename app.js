@@ -1573,7 +1573,32 @@ function init() {
   });
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    let reloading = false;
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // 每次打开都检查更新
+      reg.update().catch(() => {});
+
+      // 发现新版本：等它装好就刷新一次
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller && !reloading) {
+            reloading = true;
+            navigator.serviceWorker.controller.postMessage('SKIP_WAITING');
+            setTimeout(() => location.reload(), 300);
+          }
+        });
+      });
+    }).catch(() => {});
+
+    // 新 SW 接管时刷新（只刷一次，避免循环）
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshed) return;
+      refreshed = true;
+      location.reload();
+    });
   }
 }
 
