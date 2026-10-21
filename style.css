@@ -175,6 +175,24 @@ textarea{resize:none;}
 .chip.on{background:var(--accent-soft);color:var(--accent);}
 .chip.off{opacity:.45;text-decoration:line-through;}
 
+.ctx-size{
+  flex:0 0 auto;
+  padding:6px 14px 0;
+  font-size:11px;
+  color:var(--text-3);
+  font-variant-numeric:tabular-nums;
+}
+.ctx-size::before{
+  content:'';
+  display:inline-block;
+  width:5px;height:5px;
+  border-radius:50%;
+  background:var(--accent);
+  opacity:.6;
+  margin-right:6px;
+  vertical-align:middle;
+}
+
 .prompt-box{flex:0 0 auto;padding:10px 14px 0;}
 .prompt-input{
   width:100%;height:92px;

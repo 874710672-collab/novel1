@@ -552,6 +552,72 @@ function renderCtxChips() {
     el.textContent = `全文 ×${db.ctx.fullIds.length}`;
     box.appendChild(el);
   }
+
+  updateCtxSize();
+}
+
+/* ===== 上下文总字数 =====
+   比 buildContext() 更细，分别统计每一块，页面显示一个总量 */
+function calcCtxSize() {
+  const parts = [];
+
+  if (db.ctx.style && getSettings().stylePrompt.trim()) {
+    parts.push(getSettings().stylePrompt.trim());
+  }
+  if (db.ctx.state && db.stateFile.trim()) {
+    parts.push('【故事状态文件】\n' + db.stateFile.trim());
+  }
+  if (db.ctx.charIds && db.ctx.charIds.length) {
+    const chars = db.characters.filter(c => db.ctx.charIds.includes(c.id));
+    if (chars.length) {
+      parts.push(chars.map(c =>
+        `—— ${c.name}${c.role ? '（' + c.role + '）' : ''} ——\n${(c.body || '').trim()}`
+      ).join('\n\n'));
+    }
+  }
+  if (db.ctx.worldIds && db.ctx.worldIds.length) {
+    const we = db.worldEntries.filter(w => db.ctx.worldIds.includes(w.id));
+    if (we.length) {
+      parts.push(we.map(w => `—— ${w.title} ——\n${(w.body || '').trim()}`).join('\n\n'));
+    }
+  }
+  const sorted = [...db.chapters].sort((a, b) => a.no - b.no);
+  if (db.ctx.summaryIds.length) {
+    const sums = sorted
+      .filter(c => db.ctx.summaryIds.includes(c.id) && c.summary && c.summary.trim())
+      .map(c => c.summary.trim());
+    if (sums.length) parts.push(sums.join('\n\n'));
+  }
+  if (db.ctx.fullIds.length) {
+    const refs = sorted
+      .filter(c => db.ctx.fullIds.includes(c.id) && c.body && c.body.trim())
+      .map(c => c.body.trim());
+    if (refs.length) parts.push(refs.join('\n\n'));
+  }
+  // 当前正文随输入实时变化
+  if (db.ctx.editor) {
+    const cur = ($('editor') ? $('editor').value : '').trim();
+    if (cur) parts.push(cur);
+  }
+
+  const text = parts.join('\n\n');
+  return {
+    chars: countWords(text),
+    bytes: new Blob([text]).size
+  };
+}
+
+function updateCtxSize() {
+  const el = $('ctxSize');
+  if (!el) return;
+  try {
+    const { chars, bytes } = calcCtxSize();
+    const tokens = Math.round(chars * 0.75);   // 中文粗估：1 字 ≈ 0.75 token
+    el.textContent = `上下文 ${chars.toLocaleString()} 字 · 约 ${tokens.toLocaleString()} tokens`;
+    el.hidden = false;
+  } catch (e) {
+    el.hidden = true;
+  }
 }
 
 /* ===== 上下文弹窗 ===== */
@@ -619,6 +685,7 @@ function makeSimpleCtxRow(labelText, field, id) {
     if (!cb.checked && i >= 0) arr.splice(i, 1);
     saveDB();
     renderCtxChips();
+    updateCtxSize();
   });
   const span = document.createElement('span');
   span.textContent = labelText;
@@ -640,9 +707,14 @@ function makeCtxRow(c, field) {
     if (!cb.checked && i >= 0) arr.splice(i, 1);
     saveDB();
     renderCtxChips();
+    updateCtxSize();
   });
   const span = document.createElement('span');
-  span.textContent = `第${c.no}章 · ${c.title || '未命名'}（${countWords(c.body)}字）`;
+  // 摘要列表显示摘要本身字数，全文列表显示正文字数
+  const words = field === 'summaryIds'
+    ? countWords(c.summary || '')
+    : countWords(c.body || '');
+  span.textContent = `第${c.no}章 · ${c.title || '未命名'}（${words}字）`;
   label.appendChild(cb);
   label.appendChild(span);
   return label;
@@ -1381,6 +1453,7 @@ function init() {
   const ed = $('editor');
   ed.addEventListener('input', () => {
     updateWordCount();
+    updateCtxSize();
     clearTimeout(editorSaveTimer);
     editorSaveTimer = setTimeout(flushEditor, 600);
   });
@@ -1539,6 +1612,7 @@ function init() {
       db.ctx[k] = el.checked;
       saveDB();
       renderCtxChips();
+      updateCtxSize();
     });
   });
 
