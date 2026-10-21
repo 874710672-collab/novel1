@@ -1,5 +1,5 @@
 :root{
-  color-scheme:light;
+  color-scheme:dark;
   --bg:#111013;
   --bg-2:#17161b;
   --panel:#1c1b21;
@@ -137,6 +137,9 @@ textarea{resize:none;}
   letter-spacing:.01em;
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
+  /* 输入区按亮色处理，让输入法候选栏走浅底黑字；
+     页面其余部分仍是深色 */
+  color-scheme:light;
 }
 .editor::placeholder{color:var(--text-3);}
 
@@ -187,6 +190,7 @@ textarea{resize:none;}
   overflow-y:auto;
 }
 .prompt-input:focus{border-color:var(--accent);}
+.prompt-input{color-scheme:light;}
 
 .draw-params{
   flex:0 0 auto;
