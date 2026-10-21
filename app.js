@@ -1368,10 +1368,19 @@ function openSettings() {
 }
 
 function readSettings() {
-  getSettings().base = $('cfgBase').value.trim();
-  getSettings().key = $('cfgKey').value.trim();
-  getSettings().model = $('cfgModel').value.trim();
-  getSettings().stylePrompt = $('cfgStyle').value;
+  const s = getSettings();
+
+  const base = $('cfgBase').value.trim();
+  const key = $('cfgKey').value.trim();
+  const model = $('cfgModel').value.trim();
+  const style = $('cfgStyle').value;
+
+  // 输入框可能因系统安全策略未回填，空值不能覆盖已有设置
+  if (base) s.base = base;
+  if (key) s.key = key;
+  if (model) s.model = model;
+  if (style) s.stylePrompt = style;
+
   saveDB();
 }
 
@@ -1525,6 +1534,29 @@ function init() {
   $('btnUpdateState').addEventListener('click', updateState);
   $('btnSaveState').addEventListener('click', saveState);
 
+  // 设置：输入即保存，避免关闭时读空值把配置清掉
+  ['cfgBase', 'cfgKey', 'cfgModel', 'cfgStyle'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      const s = getSettings();
+      if (id === 'cfgBase') s.base = el.value.trim();
+      if (id === 'cfgKey') s.key = el.value.trim();
+      if (id === 'cfgModel') s.model = el.value.trim();
+      if (id === 'cfgStyle') s.stylePrompt = el.value;
+      saveDB();
+      if (id === 'cfgStyle' || id === 'cfgBase' || id === 'cfgModel') updateCtxSize();
+    });
+    el.addEventListener('change', () => {
+      const s = getSettings();
+      if (id === 'cfgBase') s.base = el.value.trim();
+      if (id === 'cfgKey') s.key = el.value.trim();
+      if (id === 'cfgModel') s.model = el.value.trim();
+      if (id === 'cfgStyle') s.stylePrompt = el.value;
+      saveDB();
+    });
+  });
+
   // 设置
   $('btnTest').addEventListener('click', testConnection);
   $('btnExportAll').addEventListener('click', exportAll);
@@ -1618,14 +1650,10 @@ function init() {
 
   // 关闭
   $('modalMask').addEventListener('click', () => {
-    if (openModalId === 'modalSettings') readSettings();
     closeModal();
   });
   document.querySelectorAll('[data-close]').forEach(b =>
-    b.addEventListener('click', () => {
-      if (openModalId === 'modalSettings') readSettings();
-      closeModal();
-    }));
+    b.addEventListener('click', () => closeModal()));
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
