@@ -11,7 +11,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
 
@@ -146,12 +146,19 @@
   </div>
   <div class="modal-body">
     <div class="field"><label>接口地址</label><input id="cfgBase" placeholder="https://api.deepseek.com/v1"></div>
-    <div class="field"><label>API Key</label><input id="cfgKey" type="password" placeholder="sk-..."></div>
+    <div class="field">
+      <label>API Key</label>
+      <input id="cfgKey" type="text" placeholder="sk-..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button class="eye-btn" id="btnToggleKey" type="button" title="隐藏">◉</button>
+    </div>
     <div class="field"><label>模型</label><input id="cfgModel" placeholder="deepseek-chat"></div>
     <button class="ghost-btn full" id="btnTest">测试连接</button>
 
     <div class="section-title">文风要求（每次抽卡都会带上）</div>
     <textarea id="cfgStyle" class="big-area"></textarea>
+
+    <div class="section-title">AI 提示词</div>
+    <button class="ghost-btn full" id="btnOpenPrompts">管理摘要 / 状态文件的提示词</button>
 
     <div class="section-title">数据</div>
     <div class="data-actions">
@@ -293,6 +300,34 @@
   </div>
 </div>
 
+<!-- 提示词管理 -->
+<div class="modal" id="modalPrompts">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>关闭</button>
+    <span class="modal-title">AI 提示词</span>
+    <button class="modal-save" id="btnSavePrompt">保存</button>
+  </div>
+  <div class="modal-body">
+    <div class="seg seg-wide" id="segPromptTab">
+      <button data-p="summary" class="on">章节摘要</button>
+      <button data-p="state">状态文件</button>
+    </div>
+
+    <div class="prompt-status">
+      <span class="prompt-badge default" id="promptBadge">默认版本</span>
+      <button class="mini-btn" id="btnLoadDefault">载入默认作对照</button>
+    </div>
+
+    <textarea id="promptEdit" class="big-area huge" spellcheck="false"></textarea>
+
+    <p class="hint" id="promptHint">生成摘要时会把「章节正文」拼在这个提示词后面一起发出。改完点右上「保存」生效。</p>
+
+    <div class="modal-foot">
+      <button class="ghost-btn danger full" id="btnResetPrompt" hidden>恢复默认版本</button>
+    </div>
+  </div>
+</div>
+
 <!-- 书架 -->
 <div class="modal" id="modalShelf">
   <div class="modal-head">
@@ -390,6 +425,7 @@
 <script src="cast.js?v=4"></script>
 <script src="history.js?v=1"></script>
 <script src="shelf.js?v=1"></script>
-<script src="app.js?v=15"></script>
+<script src="prompts-edit.js?v=1"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

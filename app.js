@@ -41,7 +41,9 @@ function defaultSettings() {
     key: '',
     model: 'deepseek-chat',
     temperature: 1.0,
-    stylePrompt: (typeof DEFAULT_STYLE_PROMPT !== 'undefined' ? DEFAULT_STYLE_PROMPT : '')
+    stylePrompt: (typeof DEFAULT_STYLE_PROMPT !== 'undefined' ? DEFAULT_STYLE_PROMPT : ''),
+    summaryPrompt: '',      // 空 = 用内置默认
+    statePromptBody: ''     // 空 = 用内置默认
   };
 }
 
@@ -230,7 +232,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts'];
 let openModalId = null;
 
 function openModal(id) {
@@ -1011,7 +1013,7 @@ async function generateSummary() {
   summaryAbort = new AbortController();
   try {
     const out = await callModel(
-      SUMMARY_PROMPT,
+      getSummaryPrompt(),
       `请为下面这一章生成结构化摘要。\n\n【章节编号】第${c.no}章\n【章节正文】\n${c.body}`,
       txt => { $('summaryOut').value = txt; },
       summaryAbort.signal
@@ -1083,7 +1085,7 @@ function buildStateMessages() {
   if (stateMode === 'init') {
     const body = withSum.map(c => `—— 第${c.no}章${c.title && c.title !== '未命名' ? '·' + c.title : ''} 摘要 ——\n${c.summary.trim()}`).join('\n\n');
     return {
-      system: '当前模式：模式A（首次生成）\n\n' + STATE_PROMPT_BODY,
+      system: '当前模式：模式A（首次生成）\n\n' + getStatePromptBody(),
       user: `请根据以下章节摘要，生成完整的初始状态文件。\n\n${body}`
     };
   }
@@ -1093,7 +1095,7 @@ function buildStateMessages() {
     throw new Error('还没有状态文件，请先用「首次生成」');
   }
   return {
-    system: '当前模式：模式B（增量更新）\n\n' + STATE_PROMPT_BODY,
+    system: '当前模式：模式B（增量更新）\n\n' + getStatePromptBody(),
     user: `【现有状态文件】\n${db.stateFile.trim()}\n\n【最新一章摘要】\n第${latest.no}章${latest.title && latest.title !== '未命名' ? '·' + latest.title : ''}\n${latest.summary.trim()}\n\n请输出更新后的完整状态文件。`
   };
 }
@@ -1175,6 +1177,8 @@ function exportAll() {
     shelf: shelf
   };
   download(`书架备份-${todayStr()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  // 导出后立刻把设置回填，避免系统清空输入框后残留空值
+  setTimeout(() => refreshSettingsFields(), 60);
   const totalCh = shelf.books.reduce((n, b) => n + (b.data.chapters || []).length, 0);
   toast(`已导出 ${shelf.books.length} 本，共 ${totalCh} 章`);
 }
@@ -1360,11 +1364,25 @@ function updateStorageHint() {
 function openSettings() {
   const s = getSettings();
   $('cfgBase').value = s.base || '';
-  $('cfgKey').value = s.key || '';
+  const kf = $('cfgKey');
+  kf.type = 'password';
+  kf.value = s.key || '';
+  const eye = $('btnToggleKey');
+  if (eye) { eye.textContent = '◎'; eye.title = '显示'; }
   $('cfgModel').value = s.model || '';
   $('cfgStyle').value = s.stylePrompt || '';
   updateStorageHint();
   openModal('modalSettings');
+}
+
+/* 把已保存的设置回填到输入框 */
+function refreshSettingsFields() {
+  const s = getSettings();
+  const b = $('cfgBase'), k = $('cfgKey'), m = $('cfgModel'), st = $('cfgStyle');
+  if (b && document.activeElement !== b) b.value = s.base || '';
+  if (k && document.activeElement !== k) k.value = s.key || '';
+  if (m && document.activeElement !== m) m.value = s.model || '';
+  if (st && document.activeElement !== st) st.value = s.stylePrompt || '';
 }
 
 function readSettings() {
@@ -1556,6 +1574,30 @@ function init() {
       saveDB();
     });
   });
+
+  // 提示词管理
+  $('btnOpenPrompts').addEventListener('click', () => {
+    closeModal();
+    setTimeout(openPrompts, 280);
+  });
+  document.querySelectorAll('#segPromptTab button').forEach(b => {
+    b.addEventListener('click', () => switchPromptTab(b.dataset.p));
+  });
+  $('btnSavePrompt').addEventListener('click', savePromptEdit);
+  $('btnResetPrompt').addEventListener('click', resetPromptEdit);
+  $('btnLoadDefault').addEventListener('click', viewDefaultPrompt);
+
+  // Key 显示/隐藏
+  const eye = $('btnToggleKey');
+  if (eye) {
+    eye.addEventListener('click', () => {
+      const k = $('cfgKey');
+      const hidden = k.type === 'password';
+      k.type = hidden ? 'text' : 'password';
+      eye.textContent = hidden ? '◉' : '◎';
+      eye.title = hidden ? '隐藏' : '显示';
+    });
+  }
 
   // 设置
   $('btnTest').addEventListener('click', testConnection);
