@@ -20,6 +20,7 @@ function defaultBookData() {
     chapters: [],
     stateFile: '',
     cards: [],
+    draft: '',
     lastChapterId: null,
     characters: [],
     worldEntries: [],
@@ -232,7 +233,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts', 'modalDraft'];
 let openModalId = null;
 
 function openModal(id) {
@@ -1574,6 +1575,17 @@ function init() {
       saveDB();
     });
   });
+
+  // 草稿
+  $('btnDraft').addEventListener('click', openDraft);
+  $('draftArea').addEventListener('input', () => {
+    updateDraftCount();
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraftNow, 500);
+  });
+  $('draftArea').addEventListener('blur', saveDraftNow);
+  $('btnDraftClear').addEventListener('click', clearDraft);
+  $('btnDraftToEditor').addEventListener('click', draftToEditor);
 
   // 提示词管理
   $('btnOpenPrompts').addEventListener('click', () => {

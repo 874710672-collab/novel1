@@ -11,7 +11,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=23">
+<link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 
@@ -21,6 +21,7 @@
   <button class="tb-btn" id="btnBooks" title="书架">书</button>
   <div class="tb-title" id="chapterTitle">未选择章节</div>
   <div class="tb-right">
+    <button class="tb-btn" id="btnDraft" title="草稿">✎</button>
     <button class="tb-btn" id="btnSummary" title="生成摘要">摘</button>
     <button class="tb-btn" id="btnCast" title="人设库">人</button>
     <button class="tb-btn" id="btnHistory" title="历史卡片">卡</button>
@@ -300,6 +301,25 @@
   </div>
 </div>
 
+<!-- 草稿 -->
+<div class="modal" id="modalDraft">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>关闭</button>
+    <span class="modal-title">草稿</span>
+    <span class="modal-save-space"></span>
+  </div>
+  <div class="modal-body draft-body">
+    <textarea id="draftArea" class="big-area draft-area" placeholder="随手写点什么……&#10;这里的内容不会进入正文，也不会被抽卡带上。"></textarea>
+    <div class="draft-foot">
+      <span class="draft-count" id="draftCount">0 字</span>
+      <div class="draft-ops">
+        <button class="mini-btn" id="btnDraftClear">清空</button>
+        <button class="mini-btn" id="btnDraftToEditor">插入正文</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 提示词管理 -->
 <div class="modal" id="modalPrompts">
   <div class="modal-head">
@@ -426,6 +446,7 @@
 <script src="history.js?v=1"></script>
 <script src="shelf.js?v=1"></script>
 <script src="prompts-edit.js?v=1"></script>
-<script src="app.js?v=18"></script>
+<script src="draft.js?v=1"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>

@@ -500,6 +500,32 @@ textarea{resize:none;}
 }
 .cast-del:active{color:var(--danger);}
 
+/* 草稿 */
+.draft-body{
+  display:flex;flex-direction:column;
+  min-height:60vh;
+}
+.draft-area{
+  flex:1 1 auto;
+  height:auto;
+  min-height:50vh;
+  margin-top:0;
+  font-size:15.5px;
+  line-height:1.8;
+}
+.draft-foot{
+  flex:0 0 auto;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:10px;
+  padding-top:10px;
+}
+.draft-count{
+  font-size:11.5px;
+  color:var(--text-3);
+  font-variant-numeric:tabular-nums;
+}
+.draft-ops{display:flex;gap:7px;}
+
 /* 提示词管理 */
 .prompt-status{
   display:flex;align-items:center;gap:10px;
