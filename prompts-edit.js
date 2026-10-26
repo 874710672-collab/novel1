@@ -14,11 +14,15 @@ function getStatePromptBody() {
   return (custom && custom.trim()) ? custom : STATE_PROMPT_BODY;
 }
 
+function getPlotPromptBody() {
+  const custom = getSettings().plotPrompt;
+  return (custom && custom.trim()) ? custom : PLOT_PROMPT_DEFAULT;
+}
+
 function isCustomized(which) {
   const s = getSettings();
-  if (which === 'summary') {
-    return !!(s.summaryPrompt && s.summaryPrompt.trim());
-  }
+  if (which === 'summary') return !!(s.summaryPrompt && s.summaryPrompt.trim());
+  if (which === 'plot') return !!(s.plotPrompt && s.plotPrompt.trim());
   return !!(s.statePromptBody && s.statePromptBody.trim());
 }
 
@@ -36,7 +40,9 @@ function switchPromptTab(which) {
   });
 
   const area = $('promptEdit');
-  area.value = which === 'summary' ? getSummaryPrompt() : getStatePromptBody();
+  if (which === 'summary') area.value = getSummaryPrompt();
+  else if (which === 'plot') area.value = getPlotPromptBody();
+  else area.value = getStatePromptBody();
 
   updatePromptStatus();
 }
@@ -56,8 +62,9 @@ function savePromptEdit() {
   const s = getSettings();
 
   if (promptEditing === 'summary') {
-    // 与内置完全一致时，清空为默认
     s.summaryPrompt = (v.trim() === SUMMARY_PROMPT.trim()) ? '' : v;
+  } else if (promptEditing === 'plot') {
+    s.plotPrompt = (v.trim() === PLOT_PROMPT_DEFAULT.trim()) ? '' : v;
   } else {
     s.statePromptBody = (v.trim() === STATE_PROMPT_BODY.trim()) ? '' : v;
   }
@@ -68,7 +75,8 @@ function savePromptEdit() {
 
 /* ---------- 恢复默认 ---------- */
 async function resetPromptEdit() {
-  const name = promptEditing === 'summary' ? '章节摘要' : '状态文件';
+  const name = promptEditing === 'summary' ? '章节摘要'
+    : promptEditing === 'plot' ? '剧情' : '状态文件';
   const ok = await askConfirm(
     `恢复${name}提示词的默认版本？`,
     '当前修改的内容会被清空，恢复成内置的原始版本。',
@@ -78,17 +86,20 @@ async function resetPromptEdit() {
 
   const s = getSettings();
   if (promptEditing === 'summary') s.summaryPrompt = '';
+  else if (promptEditing === 'plot') s.plotPrompt = '';
   else s.statePromptBody = '';
   saveDB();
 
-  $('promptEdit').value = promptEditing === 'summary' ? SUMMARY_PROMPT : STATE_PROMPT_BODY;
+  $('promptEdit').value = promptEditing === 'summary' ? SUMMARY_PROMPT
+    : promptEditing === 'plot' ? PLOT_PROMPT_DEFAULT : STATE_PROMPT_BODY;
   updatePromptStatus();
   toast('已恢复默认');
 }
 
 /* ---------- 查看历史（只读对照用） ---------- */
 function viewDefaultPrompt() {
-  const text = promptEditing === 'summary' ? SUMMARY_PROMPT : STATE_PROMPT_BODY;
+  const text = promptEditing === 'summary' ? SUMMARY_PROMPT
+    : promptEditing === 'plot' ? PLOT_PROMPT_DEFAULT : STATE_PROMPT_BODY;
   $('promptEdit').value = text;
   updatePromptStatus();
   toast('已载入默认版本到编辑框，点保存才会生效');

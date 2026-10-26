@@ -167,6 +167,10 @@ async function switchBook(id) {
 
   closeModal();
   setTimeout(() => {
+    if (typeof loadPlotEditor === 'function') loadPlotEditor();
+    if (typeof plotMode !== 'undefined' && plotMode) {
+      try { ensurePlotForm(); renderPlotChips(); renderPlotCards(); updatePlotCtxSize(); } catch (e) {}
+    }
     if (sel) {
       selectChapter(sel.id);
     } else {

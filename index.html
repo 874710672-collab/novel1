@@ -11,7 +11,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 
@@ -19,6 +19,7 @@
 <header class="topbar">
   <button class="tb-btn" id="btnShelf" title="章节">☰</button>
   <button class="tb-btn" id="btnBooks" title="书架">书</button>
+  <button class="tb-btn mode-btn" id="btnMode" title="切换到剧情抽卡">剧情</button>
   <div class="tb-title" id="chapterTitle">未选择章节</div>
   <div class="tb-right">
     <button class="tb-btn" id="btnDraft" title="草稿">✎</button>
@@ -30,7 +31,8 @@
   </div>
 </header>
 
-<!-- ===== 主区：左右分屏 ===== -->
+<!-- ===== 正文模式 ===== -->
+<div class="mode-root" id="modeNovel">
 <main class="workspace" id="workspace">
 
   <!-- 左：编辑区 -->
@@ -84,6 +86,125 @@
     <div class="cards" id="cards"></div>
   </section>
 </main>
+</div><!-- /modeNovel -->
+<!-- ===== 正文模式结束 ===== -->
+
+<!-- ===== 剧情模式 ===== -->
+<div class="mode-root" id="modePlot" hidden>
+<main class="workspace" id="plotWorkspace">
+
+  <!-- 左：剧情编辑区 -->
+  <section class="pane pane-edit" id="plotPaneEdit">
+    <div class="pane-head">
+      <span class="pane-label">剧情编辑</span>
+      <span class="wordcount" id="plotWordCount">0 字</span>
+      <button class="mini-btn" id="btnPlotToPrompt" title="把剧情填入正文抽卡的提示词框">插入提示词</button>
+    </div>
+    <textarea id="plotEditor" class="editor" placeholder="在这里整理剧情。&#10;&#10;从右侧抽卡得到的剧情可以先「插入剧情」到这里，再手动修改、拼接。&#10;定稿后点上方「插入提示词」，会填进正文模式的提示词框。"></textarea>
+  </section>
+
+  <div class="splitter" id="plotSplitter"><div class="splitter-grip"></div></div>
+
+  <!-- 右：剧情抽卡 -->
+  <section class="pane pane-draw" id="plotPaneDraw">
+    <div class="pane-head">
+      <span class="pane-label">剧情抽卡</span>
+      <div class="pane-head-actions">
+        <button class="mini-btn" id="btnPlotContext" title="上下文">上下文</button>
+        <button class="mini-btn" id="btnPlotHistory" title="剧情卡历史">历史</button>
+      </div>
+    </div>
+
+    <div class="ctx-chips" id="plotCtxChips"></div>
+    <div class="ctx-size" id="plotCtxSize" hidden></div>
+
+    <div class="plot-form" id="plotForm">
+      <div class="pf-row">
+        <span class="pf-label">焦点人物</span>
+        <div class="pf-chips" id="pfChars"></div>
+      </div>
+
+      <div class="pf-row">
+        <span class="pf-label">氛围</span>
+        <div class="pf-chips" id="pfMoods"></div>
+      </div>
+
+      <div class="pf-row">
+        <span class="pf-label">篇幅</span>
+        <div class="seg seg-sm" id="pfLength">
+          <button data-v="0" class="on">不指定</button>
+          <button data-v="300">300</button>
+          <button data-v="500">500</button>
+          <button data-v="800">800</button>
+        </div>
+      </div>
+
+      <div class="pf-row">
+        <span class="pf-label">视角</span>
+        <div class="seg seg-sm" id="pfPov">
+          <button data-v="" class="on">不限</button>
+          <button data-v="第三人称有限视角">第三人称</button>
+          <button data-v="第一人称">第一人称</button>
+        </div>
+      </div>
+
+      <div class="pf-field">
+        <div class="pf-field-head"><span>场景</span><button class="pf-clear" data-clear="pfScene">清空</button></div>
+        <textarea id="pfScene" class="pf-input" rows="1" placeholder="在哪、什么时候"></textarea>
+      </div>
+
+      <div class="pf-field">
+        <div class="pf-field-head"><span>这一场要推进什么</span><button class="pf-clear" data-clear="pfGoal">清空</button></div>
+        <textarea id="pfGoal" class="pf-input" rows="1" placeholder="一句话，比如：许昭昭发现包子摊没来"></textarea>
+      </div>
+
+      <div class="pf-field">
+        <div class="pf-field-head"><span>必须发生的事</span><button class="pf-clear" data-clear="pfMust">清空</button></div>
+        <textarea id="pfMust" class="pf-input" rows="1" placeholder="可选"></textarea>
+      </div>
+
+      <div class="pf-field">
+        <div class="pf-field-head"><span>禁止出现</span><button class="pf-clear" data-clear="pfBan">清空</button></div>
+        <textarea id="pfBan" class="pf-input" rows="1" placeholder="可选，比如：不要出现打斗"></textarea>
+      </div>
+
+      <div class="pf-field">
+        <div class="pf-field-head"><span>结尾落点</span><button class="pf-clear" data-clear="pfEnd">清空</button></div>
+        <textarea id="pfEnd" class="pf-input" rows="1" placeholder="可选，比如：停在许昭昭转身离开"></textarea>
+      </div>
+
+      <div class="pf-field">
+        <div class="pf-field-head"><span>自由补充</span><button class="pf-clear" data-clear="pfExtra">清空</button></div>
+        <textarea id="pfExtra" class="pf-input" rows="2" placeholder="还没有固定下来的想法都写这里，包括字数要求"></textarea>
+      </div>
+    </div>
+
+    <div class="draw-params">
+      <div class="param">
+        <span class="param-label">张数</span>
+        <div class="seg" id="plotSegCount">
+          <button data-n="1" class="on">1</button>
+          <button data-n="2">2</button>
+          <button data-n="3">3</button>
+          <button data-n="4">4</button>
+        </div>
+      </div>
+      <label class="param param-temp">
+        <span class="param-label">温度</span>
+        <input type="range" id="plotTempRange" min="0" max="200" value="100">
+        <span class="param-val" id="plotTempVal">1.0</span>
+      </label>
+    </div>
+
+    <button class="draw-btn" id="btnPlotDraw">
+      <span class="draw-btn-text">抽 剧 情</span>
+    </button>
+
+    <div class="cards" id="plotCards"></div>
+  </section>
+</main>
+</div><!-- /modePlot -->
+<!-- ===== 剧情模式结束 ===== -->
 
 <!-- ===== 章节抽屉 ===== -->
 <div class="overlay" id="overlay"></div>
@@ -320,6 +441,22 @@
   </div>
 </div>
 
+<!-- 剧情卡历史 -->
+<div class="modal" id="modalPlotHistory">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>关闭</button>
+    <span class="modal-title">剧情卡历史</span>
+    <button class="modal-save" id="btnClearPlotHistory">清空</button>
+  </div>
+  <div class="modal-body">
+    <div class="hist-bar">
+      <input id="plotHistSearch" class="pick-search" type="search" placeholder="搜索剧情内容" autocomplete="off">
+    </div>
+    <div class="hist-meta" id="plotHistMeta"></div>
+    <div class="hist-list" id="plotHistList"></div>
+  </div>
+</div>
+
 <!-- 提示词管理 -->
 <div class="modal" id="modalPrompts">
   <div class="modal-head">
@@ -331,6 +468,7 @@
     <div class="seg seg-wide" id="segPromptTab">
       <button data-p="summary" class="on">章节摘要</button>
       <button data-p="state">状态文件</button>
+      <button data-p="plot">剧情</button>
     </div>
 
     <div class="prompt-status">
@@ -447,6 +585,7 @@
 <script src="shelf.js?v=1"></script>
 <script src="prompts-edit.js?v=1"></script>
 <script src="draft.js?v=1"></script>
-<script src="app.js?v=19"></script>
+<script src="plot.js?v=2"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

@@ -21,6 +21,7 @@ function defaultBookData() {
     stateFile: '',
     cards: [],
     draft: '',
+    plot: null,          // 剧情抽卡数据（懒初始化，见 plot.js）
     lastChapterId: null,
     characters: [],
     worldEntries: [],
@@ -44,7 +45,8 @@ function defaultSettings() {
     temperature: 1.0,
     stylePrompt: (typeof DEFAULT_STYLE_PROMPT !== 'undefined' ? DEFAULT_STYLE_PROMPT : ''),
     summaryPrompt: '',      // 空 = 用内置默认
-    statePromptBody: ''     // 空 = 用内置默认
+    statePromptBody: '',    // 空 = 用内置默认
+    plotPrompt: ''          // 空 = 用内置默认
   };
 }
 
@@ -233,7 +235,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts', 'modalDraft'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts', 'modalDraft', 'modalPlotHistory'];
 let openModalId = null;
 
 function openModal(id) {
@@ -405,6 +407,10 @@ function selectChapter(id) {
   currentChapterId = id;
   db.lastChapterId = id;
   saveDB();
+  // 剧情模式下顶栏要显示「剧情构思中…」
+  if (typeof plotMode !== 'undefined' && plotMode && typeof applyPlotTopbar === 'function') {
+    setTimeout(applyPlotTopbar, 0);
+  }
   const c = currentChapter();
   $('chapterTitle').textContent = c ? `第${c.no}章 · ${c.title || '未命名'}` : '未选择章节';
   $('chapterTitle').classList.toggle('editable', !!c);
@@ -1476,6 +1482,7 @@ function init() {
   renderChapterList();
   renderCtxChips();
   renderCtxLists();
+  if (typeof loadPlotEditor === 'function') loadPlotEditor();
 
   // 编辑器自动保存
   const ed = $('editor');
@@ -1573,6 +1580,40 @@ function init() {
       if (id === 'cfgModel') s.model = el.value.trim();
       if (id === 'cfgStyle') s.stylePrompt = el.value;
       saveDB();
+    });
+  });
+
+  // 剧情模式
+  $('btnMode').addEventListener('click', togglePlotMode);
+  $('plotEditor').addEventListener('input', () => {
+    updatePlotWordCount();
+    clearTimeout(plotSaveTimer);
+    plotSaveTimer = setTimeout(savePlotEditor, 600);
+  });
+  $('plotEditor').addEventListener('blur', savePlotEditor);
+  $('btnPlotToPrompt').addEventListener('click', plotToPrompt);
+  $('btnPlotContext').addEventListener('click', () => {
+    renderCtxLists();
+    $('ctxStyle').checked = db.ctx.style;
+    $('ctxState').checked = db.ctx.state;
+    $('ctxEditor').checked = db.ctx.editor;
+    openModal('modalContext');
+  });
+  $('btnPlotHistory').addEventListener('click', openPlotHistory);
+  $('btnPlotDraw').addEventListener('click', doPlotDraw);
+  $('plotHistSearch').addEventListener('input', e => {
+    plotHistQuery = e.target.value;
+    plotHistLimit = 60;
+    renderPlotHistory();
+  });
+  $('btnClearPlotHistory').addEventListener('click', clearPlotHistory);
+  document.querySelectorAll('.pf-clear').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const el = $(btn.dataset.clear);
+      if (!el) return;
+      el.value = '';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.focus();
     });
   });
 
