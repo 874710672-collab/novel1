@@ -22,6 +22,11 @@
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;margin:0;}
+html{
+  background:#111013;
+  /* 让系统采样到实色，避免 Liquid Glass 叠出模糊 */
+  background-color:#111013;
+}
 body{
   background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Helvetica Neue",sans-serif;
@@ -38,10 +43,22 @@ textarea{resize:none;}
   height:calc(50px + var(--safe-t));
   padding:var(--safe-t) 12px 0;
   display:flex;align-items:center;gap:10px;
-  /* 纯色不透明：避免与 iOS 26 系统级 Liquid Glass 叠加发虚 */
   background:#111013;
   border-bottom:1px solid var(--line);
   z-index:60;
+  isolation:isolate;
+}
+/* 用实色伪元素把状态栏安全区整片盖住，
+   避免系统 Liquid Glass 采样到半透明区域后做模糊 */
+.topbar::before{
+  content:'';
+  position:absolute;
+  left:0;right:0;
+  top:calc(-1 * var(--safe-t));
+  height:calc(100% + var(--safe-t));
+  background:#111013;
+  z-index:-1;
+  pointer-events:none;
 }
 /* 顶栏下方一条过渡带，遮住内容滚动时露出的毛边 */
 .topbar::after{
