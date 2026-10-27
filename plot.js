@@ -52,7 +52,8 @@ function plotData() {
         end: '',
         extra: '',
         count: 1,
-        temperature: 1.0
+        temperature: 1.0,
+        includePlot: true
       }
     };
   }
@@ -60,7 +61,7 @@ function plotData() {
     db.plot.form = {
       charIds: [], moods: [], length: 0, pov: '',
       scene: '', goal: '', must: '', ban: '', end: '', extra: '',
-      count: 1, temperature: 1.0
+      count: 1, temperature: 1.0, includePlot: true
     };
   }
   return db.plot;
@@ -178,16 +179,63 @@ function ensurePlotForm() {
   }
 
   // 篇幅
+  // 篇幅：预设档位 + 自定义
+  const customInput = $('pfLengthCustom');
+  const isCustom = f.lengthCustom && Number(f.lengthCustom) > 0;
+
   document.querySelectorAll('#pfLength button').forEach(b => {
-    b.classList.toggle('on', Number(b.dataset.v) === f.length);
+    const v = b.dataset.v;
+    const isOn = v === 'custom'
+      ? isCustom
+      : (!isCustom && Number(v) === Number(f.length || 0));
+    b.classList.toggle('on', isOn);
+
     b.onclick = () => {
-      f.length = Number(b.dataset.v);
+      if (v === 'custom') {
+        // 切到自定义：保留上次填的数字
+        f.length = 0;
+        if (!f.lengthCustom) f.lengthCustom = 300;
+        customInput.hidden = false;
+        customInput.value = String(f.lengthCustom);
+        setTimeout(() => { try { customInput.focus(); customInput.select(); } catch (e) {} }, 60);
+      } else {
+        f.length = Number(v);
+        f.lengthCustom = 0;
+        customInput.hidden = true;
+        customInput.value = '';
+      }
       document.querySelectorAll('#pfLength button').forEach(x => x.classList.remove('on'));
       b.classList.add('on');
       saveDB();
       updatePlotCtxSize();
     };
   });
+
+  // 自定义字数输入
+  if (isCustom) {
+    customInput.hidden = false;
+    customInput.value = String(f.lengthCustom);
+  } else {
+    customInput.hidden = true;
+    customInput.value = '';
+  }
+  customInput.oninput = () => {
+    const v = parseInt(customInput.value, 10);
+    f.lengthCustom = (v > 0) ? v : 0;
+    f.length = 0;
+    saveDB();
+    updatePlotCtxSize();
+  };
+  customInput.onblur = () => {
+    // 夹到合理范围
+    let v = parseInt(customInput.value, 10);
+    if (!(v > 0)) { f.lengthCustom = 0; customInput.value = ''; saveDB(); return; }
+    v = Math.max(50, Math.min(5000, v));
+    f.lengthCustom = v;
+    customInput.value = String(v);
+    saveDB();
+    updatePlotCtxSize();
+  };
 
   // 视角
   document.querySelectorAll('#pfPov button').forEach(b => {
@@ -314,7 +362,10 @@ function buildPlotContext() {
   if (f.must && f.must.trim()) brief.push(`- 必须发生：${f.must.trim()}`);
   if (f.ban && f.ban.trim()) brief.push(`- 禁止出现：${f.ban.trim()}`);
   if (f.end && f.end.trim()) brief.push(`- 结尾落点：${f.end.trim()}`);
-  if (f.length && Number(f.length) > 0) brief.push(`- 篇幅：约 ${f.length} 字`);
+  const effLen = (f.lengthCustom && Number(f.lengthCustom) > 0)
+    ? Number(f.lengthCustom)
+    : (f.length && Number(f.length) > 0 ? Number(f.length) : 0);
+  if (effLen > 0) brief.push(`- 篇幅：约 ${effLen} 字`);
   if (f.extra && f.extra.trim()) brief.push(`- 补充：${f.extra.trim()}`);
 
   let system = parts.join('\n\n');
@@ -328,15 +379,34 @@ function buildPlotContext() {
 function renderPlotChips() {
   const box = $('plotCtxChips');
   box.innerHTML = '';
-  const items = [
-    { k: 'state', label: '状态文件' },
-  ];
-  for (const it of items) {
-    const el = document.createElement('span');
-    el.className = 'chip ' + (db.ctx[it.k] ? 'on' : 'off');
-    el.textContent = it.label;
-    box.appendChild(el);
-  }
+
+  // 状态文件（全局开关）
+  const elState = document.createElement('span');
+  elState.className = 'chip ' + (db.ctx.state ? 'on' : 'off');
+  elState.textContent = '状态文件';
+  elState.addEventListener('click', () => {
+    db.ctx.state = !db.ctx.state;
+    saveDB();
+    renderPlotChips();
+    updatePlotCtxSize();
+  });
+  box.appendChild(elState);
+
+  // 当前剧情编辑区（剧情模式专属开关）
+  const p0 = plotData();
+  const incPlot = p0 && p0.form ? (p0.form.includePlot !== false) : true;
+  const elPlot = document.createElement('span');
+  elPlot.className = 'chip ' + (incPlot ? 'on' : 'off');
+  elPlot.textContent = '当前剧情';
+  elPlot.title = '是否把左侧剧情编辑区的内容发给 AI';
+  elPlot.addEventListener('click', () => {
+    const p = plotData();
+    p.form.includePlot = !(p.form.includePlot !== false);
+    saveDB();
+    renderPlotChips();
+    updatePlotCtxSize();
+  });
+  box.appendChild(elPlot);
   if (db.ctx.summaryIds.length) {
     const el = document.createElement('span');
     el.className = 'chip on';
@@ -473,7 +543,10 @@ async function doPlotDraw() {
     const names = db.characters.filter(c => f.charIds.includes(c.id)).map(c => c.name);
     if (names.length) briefParts.push(names.join('+'));
   }
-  if (f.length && Number(f.length) > 0) briefParts.push(`约${f.length}字`);
+  const lenForTag = (f.lengthCustom && Number(f.lengthCustom) > 0)
+    ? Number(f.lengthCustom)
+    : (f.length && Number(f.length) > 0 ? Number(f.length) : 0);
+  if (lenForTag > 0) briefParts.push(`约${lenForTag}字`);
   const brief = briefParts.join(' · ');
   plotCards.forEach(c => { c.brief = brief; });
 
@@ -509,7 +582,7 @@ async function doPlotDraw() {
           brief,
           mood: (f.moods || []).slice(),
           charIds: (f.charIds || []).slice(),
-          length: Number(f.length) || 0,
+          length: lenForTag || 0,
           createdAt: Date.now()
         });
         saveDB();

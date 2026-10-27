@@ -567,6 +567,26 @@ textarea{resize:none;}
 .seg-sm{padding:2px;}
 .seg-sm button{font-size:11px;padding:4px 9px;}
 
+.pf-length-wrap{
+  display:flex;align-items:center;gap:6px;
+  flex:1 1 auto;flex-wrap:wrap;
+  min-width:0;
+}
+.pf-length-input{
+  width:66px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:4px 8px;
+  font-size:12px;
+  outline:none;
+  color:var(--text);
+  font-variant-numeric:tabular-nums;
+}
+.pf-length-input:focus{border-color:var(--accent);}
+.pf-length-input::-webkit-outer-spin-button,
+.pf-length-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+
 .pf-field{margin-bottom:7px;}
 .pf-field-head{
   display:flex;align-items:center;justify-content:space-between;
