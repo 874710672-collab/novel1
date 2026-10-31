@@ -178,9 +178,16 @@ async function deleteCharacter(id) {
   if (!ok) return;
   db.characters = db.characters.filter(x => x.id !== id);
   db.ctx.charIds = db.ctx.charIds.filter(x => x !== id);
+  // 同步清理剧情表单里的勾选，否则会留下指向已删除人物的脏数据
+  if (db.plot && db.plot.form && Array.isArray(db.plot.form.charIds)) {
+    db.plot.form.charIds = db.plot.form.charIds.filter(x => x !== id);
+  }
   saveDB();
   renderCtxLists();
   renderCtxChips();
+  if (typeof plotMode !== 'undefined' && plotMode) {
+    try { ensurePlotForm(); renderPlotChips(); updatePlotCtxSize(); } catch (e) {}
+  }
   closeModal();
   setTimeout(returnToCast, 260);
   toast('已删除');

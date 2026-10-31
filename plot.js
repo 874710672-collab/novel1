@@ -139,6 +139,13 @@ function ensurePlotForm() {
   if (!p) return;
   const f = p.form;
 
+  // 清掉指向已删除人物的残留 id
+  if (Array.isArray(f.charIds)) {
+    const before = f.charIds.length;
+    f.charIds = f.charIds.filter(id => db.characters.some(c => c.id === id));
+    if (f.charIds.length !== before) saveDB();
+  }
+
   // 焦点人物
   const chars = $('pfChars');
   chars.innerHTML = '';
@@ -155,6 +162,7 @@ function ensurePlotForm() {
         else f.charIds.push(c.id);
         b.classList.toggle('on');
         saveDB();
+        renderPlotChips();
         updatePlotCtxSize();
       });
       chars.appendChild(b);
@@ -316,7 +324,8 @@ function buildPlotContext() {
   }
 
   // 人物：优先用表单勾选的焦点人物，其次用上下文的 charIds
-  const ids = (f.charIds && f.charIds.length) ? f.charIds : (db.ctx.charIds || []);
+  const validCharIds = (f.charIds || []).filter(id => db.characters.some(c => c.id === id));
+  const ids = validCharIds.length ? validCharIds : (db.ctx.charIds || []).filter(id => db.characters.some(c => c.id === id));
   if (ids.length) {
     const chars = db.characters.filter(c => ids.includes(c.id));
     if (chars.length) {
@@ -420,7 +429,10 @@ function renderPlotChips() {
     box.appendChild(el);
   }
   const p = plotData();
-  const fc = p && p.form.charIds ? p.form.charIds.length : 0;
+  // 只统计仍然存在的人物，避免显示已删除的脏 id
+  const fc = p && p.form && Array.isArray(p.form.charIds)
+    ? p.form.charIds.filter(id => db.characters.some(c => c.id === id)).length
+    : 0;
   if (fc) {
     const el = document.createElement('span');
     el.className = 'chip on';
