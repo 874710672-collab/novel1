@@ -2,7 +2,7 @@
 const CACHE = 'novel-draw-v17';
 const ASSETS = [
   './', './index.html', './style.css', './app.js', './prompts.js',
-  './confirm.js', './cast.js', './history.js', './shelf.js', './prompts-edit.js', './draft.js', './plot.js', './search.js',
+  './confirm.js', './cast.js', './history.js', './shelf.js', './prompts-edit.js', './draft.js', './plot.js', './search.js', './outline.js',
   './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'
 ];
 

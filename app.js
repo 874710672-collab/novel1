@@ -22,6 +22,7 @@ function defaultBookData() {
     cards: [],
     draft: '',
     plot: null,          // 剧情抽卡数据（懒初始化，见 plot.js）
+    outline: null,       // 大纲数据（懒初始化，见 outline.js）
     lastChapterId: null,
     characters: [],
     worldEntries: [],
@@ -32,7 +33,10 @@ function defaultBookData() {
       summaryIds: [],
       fullIds: [],
       charIds: [],
-      worldIds: []
+      worldIds: [],
+      master: true,      // 总纲
+      volumeIds: [],     // 卷纲
+      chapOutlineIds: [] // 章纲
     }
   };
 }
@@ -235,7 +239,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts', 'modalDraft', 'modalPlotHistory'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts', 'modalDraft', 'modalPlotHistory', 'modalVolumeEdit', 'modalChapOutlineEdit'];
 let openModalId = null;
 
 function openModal(id) {
@@ -485,8 +489,15 @@ async function removeChapter(id) {
 
   const words = countWords(c.body);
   const hasSum = c.summary && c.summary.trim();
-  const desc = `第${c.no}章「${c.title || '未命名'}」的正文（${words}字）` +
-    (hasSum ? '和摘要' : '') + '会被一起删除，无法恢复。';
+  const hasOutline = db.outline && db.outline.chapterOutlines && db.outline.chapterOutlines[id];
+
+  const parts = [];
+  parts.push(`正文（${words}字）`);
+  if (hasSum) parts.push('摘要');
+  if (hasOutline) parts.push('章纲');
+
+  const desc = `第${c.no}章「${c.title || '未命名'}」的` +
+    parts.join('、') + '会被一起删除，无法恢复。';
 
   const ok = await askConfirm('删除这一章？', desc, '删除');
   if (!ok) return;
@@ -494,6 +505,15 @@ async function removeChapter(id) {
   db.chapters = db.chapters.filter(x => x.id !== id);
   db.ctx.summaryIds = db.ctx.summaryIds.filter(x => x !== id);
   db.ctx.fullIds = db.ctx.fullIds.filter(x => x !== id);
+
+  // 连带清理这章的章纲（单向：只删章纲，绝不反向影响章节）
+  cleanupChapterOutline(id);
+  if (db.ctx.chapOutlineIds) {
+    db.ctx.chapOutlineIds = db.ctx.chapOutlineIds.filter(x => x !== id);
+  }
+  if (typeof outlineMode !== 'undefined' && outlineMode) {
+    try { renderChapterOutlineList(); } catch (e) {}
+  }
   if (currentChapterId === id) {
     currentChapterId = null;
     $('editor').value = '';
@@ -576,6 +596,20 @@ function calcCtxSize() {
   if (db.ctx.state && db.stateFile.trim()) {
     parts.push('【故事状态文件】\n' + db.stateFile.trim());
   }
+  if (db.ctx.master && db.outline && db.outline.master && db.outline.master.trim()) {
+    parts.push(db.outline.master.trim());
+  }
+  if (db.ctx.volumeIds && db.ctx.volumeIds.length && db.outline) {
+    const vols = (db.outline.volumes || []).filter(v => db.ctx.volumeIds.includes(v.id));
+    for (const v of vols) if (v.body) parts.push(v.body.trim());
+  }
+  if (db.ctx.chapOutlineIds && db.ctx.chapOutlineIds.length && db.outline) {
+    for (const id of db.ctx.chapOutlineIds) {
+      const t = db.outline.chapterOutlines[id];
+      if (t) parts.push(t.trim());
+    }
+  }
+
   if (db.ctx.charIds && db.ctx.charIds.length) {
     const chars = db.characters.filter(c => db.ctx.charIds.includes(c.id));
     if (chars.length) {
@@ -632,6 +666,38 @@ function updateCtxSize() {
 /* ===== 上下文弹窗 ===== */
 function renderCtxLists() {
   const sorted = [...db.chapters].sort((a, b) => a.no - b.no);
+
+  // 卷纲
+  const vw = $('ctxVolumeList');
+  vw.innerHTML = '';
+  const vols = (db.outline && db.outline.volumes) ? db.outline.volumes : [];
+  if (!vols.length) {
+    vw.innerHTML = '<div class="ctx-empty">还没有卷，去「大纲」里建</div>';
+  } else {
+    const sortedVol = [...vols].sort((a, b) => (a.from || 0) - (b.from || 0));
+    if (!db.ctx.volumeIds) db.ctx.volumeIds = [];
+    for (const v of sortedVol) {
+      vw.appendChild(makeSimpleCtxRow(
+        `${v.name}（第${v.from}–${v.to}章）`, 'volumeIds', v.id
+      ));
+    }
+  }
+
+  // 章纲
+  const co = $('ctxChapOutlineList');
+  co.innerHTML = '';
+  const chaps = [...db.chapters].sort((a, b) => a.no - b.no);
+  const withOutline = chaps.filter(c => db.outline && db.outline.chapterOutlines[c.id]);
+  if (!withOutline.length) {
+    co.innerHTML = '<div class="ctx-empty">还没有章纲，去「大纲」里写</div>';
+  } else {
+    if (!db.ctx.chapOutlineIds) db.ctx.chapOutlineIds = [];
+    for (const c of withOutline) {
+      co.appendChild(makeSimpleCtxRow(
+        `第${c.no}章 · ${c.title || '未命名'}`, 'chapOutlineIds', c.id
+      ));
+    }
+  }
 
   // 人物人设
   const cw = $('ctxCharList');
@@ -739,6 +805,31 @@ function buildContext() {
 
   if (db.ctx.state && db.stateFile.trim()) {
     parts.push('【故事状态文件】\n' + db.stateFile.trim());
+  }
+
+  // 总纲
+  if (db.ctx.master && db.outline && db.outline.master && db.outline.master.trim()) {
+    parts.push('【故事总纲】\n' + db.outline.master.trim());
+  }
+
+  // 卷纲
+  if (db.ctx.volumeIds && db.ctx.volumeIds.length && db.outline) {
+    const vols = (db.outline.volumes || []).filter(v => db.ctx.volumeIds.includes(v.id));
+    if (vols.length) {
+      const txt = vols.map(v =>
+        `—— ${v.name}（第${v.from}–${v.to}章）——\n${(v.body || '').trim()}`
+      ).join('\n\n');
+      parts.push('【卷纲】\n' + txt);
+    }
+  }
+
+  // 章纲
+  if (db.ctx.chapOutlineIds && db.ctx.chapOutlineIds.length && db.outline) {
+    const sorted2 = [...db.chapters].sort((a, b) => a.no - b.no);
+    const items = sorted2
+      .filter(c => db.ctx.chapOutlineIds.includes(c.id) && db.outline.chapterOutlines[c.id])
+      .map(c => `—— 第${c.no}章${c.title && c.title !== '未命名' ? '·' + c.title : ''} 章纲 ——\n${db.outline.chapterOutlines[c.id].trim()}`);
+    if (items.length) parts.push('【章纲】\n' + items.join('\n\n'));
   }
 
   // 人物人设
@@ -1518,6 +1609,7 @@ function init() {
     $('ctxStyle').checked = db.ctx.style;
     $('ctxState').checked = db.ctx.state;
     $('ctxEditor').checked = db.ctx.editor;
+    $('ctxMaster').checked = db.ctx.master !== false;
     openModal('modalContext');
   });
 
@@ -1582,6 +1674,24 @@ function init() {
       saveDB();
     });
   });
+
+  // 大纲
+  $('btnOutline').addEventListener('click', toggleOutlineMode);
+  document.querySelectorAll('#segOutlineTab button').forEach(b => {
+    b.addEventListener('click', () => switchOutlineTab(b.dataset.t));
+  });
+  $('masterArea').addEventListener('input', () => {
+    updateMasterCount();
+    clearTimeout(masterSaveTimer);
+    masterSaveTimer = setTimeout(saveMaster, 600);
+  });
+  $('masterArea').addEventListener('blur', saveMaster);
+  $('btnNewVolume').addEventListener('click', () => openVolumeEdit(null));
+  $('btnSaveVolume').addEventListener('click', saveVolume);
+  $('btnDeleteVolume').addEventListener('click', () => {
+    if (editingVolId) deleteVolume(editingVolId);
+  });
+  $('btnSaveChapOutline').addEventListener('click', saveChapOutline);
 
   // 查找（只在这里绑定一次）
   initSearch();
@@ -1740,7 +1850,7 @@ function init() {
   });
 
   // 上下文开关
-  ['style', 'state', 'editor'].forEach(k => {
+  ['style', 'state', 'editor', 'master'].forEach(k => {
     const el = $('ctx' + k[0].toUpperCase() + k.slice(1));
     el.addEventListener('change', () => {
       db.ctx[k] = el.checked;

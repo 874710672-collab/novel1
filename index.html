@@ -11,7 +11,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=31">
 </head>
 <body>
 
@@ -20,6 +20,7 @@
   <button class="tb-btn" id="btnShelf" title="章节">☰</button>
   <button class="tb-btn" id="btnBooks" title="书架">书</button>
   <button class="tb-btn mode-btn" id="btnMode" title="切换到剧情抽卡">剧情</button>
+  <button class="tb-btn mode-btn" id="btnOutline" title="大纲">大纲</button>
   <div class="tb-title" id="chapterTitle">未选择章节</div>
   <div class="tb-right">
     <button class="tb-btn" id="btnSearch" title="查找">🔍</button>
@@ -220,6 +221,80 @@
 </main>
 </div><!-- /modePlot -->
 <!-- ===== 剧情模式结束 ===== -->
+
+<!-- ===== 大纲模式 ===== -->
+<div class="mode-root" id="modeOutline" hidden>
+<main class="outline-root">
+  <div class="outline-head">
+    <div class="seg seg-wide" id="segOutlineTab">
+      <button data-t="master" class="on">总纲</button>
+      <button data-t="volume">卷纲</button>
+      <button data-t="chapter">章纲</button>
+    </div>
+  </div>
+
+  <div class="outline-body">
+    <!-- 总纲 -->
+    <section class="outline-pane" id="paneMaster">
+      <div class="outline-toolbar">
+        <span class="outline-count" id="masterCount">0 字</span>
+      </div>
+      <textarea id="masterArea" class="outline-area" placeholder="全书走向：主线是什么，从哪开始，到哪结束，中间要跨过哪几个坎。&#10;&#10;建议用标题分段，比如：&#10;## 第一卷：起步&#10;## 第二卷：转折"></textarea>
+    </section>
+
+    <!-- 卷纲 -->
+    <section class="outline-pane" id="paneVolume" hidden>
+      <div class="outline-toolbar">
+        <span class="outline-hint">按起止章号划分，重排章节会自动跟随</span>
+        <button class="mini-btn" id="btnNewVolume">＋ 新建卷</button>
+      </div>
+      <div class="outline-list" id="volumeList"></div>
+    </section>
+
+    <!-- 章纲 -->
+    <section class="outline-pane" id="paneChapter" hidden>
+      <div class="outline-toolbar">
+        <span class="outline-hint">每章一条，挂在具体章节上</span>
+      </div>
+      <div class="outline-list" id="chapterOutlineList"></div>
+    </section>
+  </div>
+</main>
+</div><!-- /modeOutline -->
+
+<!-- 卷纲编辑 -->
+<div class="modal" id="modalVolumeEdit">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title" id="volumeEditTitle">卷</span>
+    <button class="modal-save" id="btnSaveVolume">保存</button>
+  </div>
+  <div class="modal-body">
+    <div class="field"><label>卷名</label><input id="volName" type="text" placeholder="例如：第一卷 · 起步" maxlength="40"></div>
+    <div class="vol-range">
+      <div class="field"><label>起始章</label><input id="volFrom" type="number" min="1" inputmode="numeric"></div>
+      <div class="field"><label>结束章</label><input id="volTo" type="number" min="1" inputmode="numeric"></div>
+    </div>
+    <div class="section-title">卷纲内容</div>
+    <textarea id="volBody" class="big-area tall" placeholder="这一卷要完成什么，主角从哪走到哪，有哪些必须发生的事。"></textarea>
+    <div class="modal-foot">
+      <button class="ghost-btn danger full" id="btnDeleteVolume">删除这一卷</button>
+    </div>
+  </div>
+</div>
+
+<!-- 章纲编辑 -->
+<div class="modal" id="modalChapOutlineEdit">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>取消</button>
+    <span class="modal-title" id="chapEditTitle">章纲</span>
+    <button class="modal-save" id="btnSaveChapOutline">保存</button>
+  </div>
+  <div class="modal-body">
+    <p class="hint" id="chapEditSub"></p>
+    <textarea id="chapBody" class="big-area tall" placeholder="这一章要写什么：谁做了什么，推到哪一步，结尾停在哪。"></textarea>
+  </div>
+</div>
 
 <!-- ===== 章节抽屉 ===== -->
 <div class="overlay" id="overlay"></div>
@@ -575,6 +650,16 @@
       <span>当前章节正文</span>
       <input type="checkbox" id="ctxEditor" checked>
     </div>
+    <div class="switch-row">
+      <span>故事总纲</span>
+      <input type="checkbox" id="ctxMaster" checked>
+    </div>
+
+    <div class="section-title">卷纲（可多选）</div>
+    <div class="ctx-list" id="ctxVolumeList"></div>
+
+    <div class="section-title">章纲（可多选）</div>
+    <div class="ctx-list" id="ctxChapOutlineList"></div>
 
     <div class="section-title">人物人设（可多选）</div>
     <div class="ctx-list" id="ctxCharList"></div>
@@ -602,6 +687,7 @@
 <script src="draft.js?v=1"></script>
 <script src="plot.js?v=6"></script>
 <script src="search.js?v=2"></script>
-<script src="app.js?v=22"></script>
+<script src="outline.js?v=1"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
