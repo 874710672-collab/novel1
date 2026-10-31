@@ -566,6 +566,70 @@ textarea{resize:none;}
 .search-btn:disabled{opacity:.3;}
 
 /* ===== 大纲模式 ===== */
+.outline-head-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  max-width:900px;
+  margin:0 auto;
+}
+.outline-head-row .seg-wide{
+  flex:1 1 auto;
+  max-width:420px;
+  margin:0 auto;
+}
+
+/* AI 大纲面板 */
+.ai-src{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:12px;
+}
+.ai-src-item{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:9px 13px;
+  background:var(--panel);
+  border-radius:11px;
+  font-size:13.5px;
+}
+.ai-src-item input{
+  width:17px;height:17px;
+  accent-color:var(--accent);
+}
+.ai-chapters{
+  background:var(--panel);
+  border-radius:12px;
+  padding:9px 10px;
+  margin-bottom:4px;
+}
+.ai-chapters[hidden]{display:none;}
+.ai-chapters-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-size:11.5px;
+  color:var(--text-3);
+  padding:0 3px 7px;
+}
+.ai-chapters-head > div{display:flex;gap:6px;}
+.ai-chapters .ctx-list{
+  background:transparent;
+  padding:0;
+  max-height:160px;
+}
+.ai-actions{
+  display:flex;
+  gap:9px;
+  margin-top:12px;
+}
+.ai-apply{
+  display:flex;
+  gap:9px;
+  margin-top:10px;
+}
 .outline-root{
   position:fixed;
   top:calc(50px + var(--safe-t));

@@ -11,7 +11,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 
@@ -226,10 +226,13 @@
 <div class="mode-root" id="modeOutline" hidden>
 <main class="outline-root">
   <div class="outline-head">
-    <div class="seg seg-wide" id="segOutlineTab">
-      <button data-t="master" class="on">总纲</button>
-      <button data-t="volume">卷纲</button>
-      <button data-t="chapter">章纲</button>
+    <div class="outline-head-row">
+      <div class="seg seg-wide" id="segOutlineTab">
+        <button data-t="master" class="on">总纲</button>
+        <button data-t="volume">卷纲</button>
+        <button data-t="chapter">章纲</button>
+      </div>
+      <button class="mini-btn" id="btnAiOutline">AI 辅助</button>
     </div>
   </div>
 
@@ -261,6 +264,51 @@
   </div>
 </main>
 </div><!-- /modeOutline -->
+
+<!-- AI 大纲辅助 -->
+<div class="modal" id="modalAiOutline">
+  <div class="modal-head">
+    <button class="modal-cancel" data-close>关闭</button>
+    <span class="modal-title">AI 处理大纲</span>
+    <button class="modal-save" id="btnAiGenerate">提炼</button>
+  </div>
+  <div class="modal-body">
+    <div class="section-title" style="margin-top:0">参考材料</div>
+    <div class="ai-src">
+      <label class="ai-src-item"><input type="checkbox" id="aiSrcChapters" checked><span>读取章节</span></label>
+      <label class="ai-src-item"><input type="checkbox" id="aiSrcMaster" checked><span>现有总纲</span></label>
+      <label class="ai-src-item"><input type="checkbox" id="aiSrcVolume"><span>卷纲</span></label>
+      <label class="ai-src-item"><input type="checkbox" id="aiSrcChapOutline"><span>章纲</span></label>
+    </div>
+
+    <div class="ai-chapters" id="aiChapterPicker">
+      <div class="ai-chapters-head">
+        <span>选章节</span>
+        <div>
+          <button class="mini-btn" id="btnAiSelAll">全选</button>
+          <button class="mini-btn" id="btnAiSelNone">清空</button>
+        </div>
+      </div>
+      <div class="ctx-list" id="aiChapterList"></div>
+    </div>
+
+    <div class="section-title">我的想法（可空）</div>
+    <textarea id="aiIdea" class="big-area" placeholder="后面想让主角被同行举报，然后……&#10;&#10;没有想法就留空，只提炼已写内容。"></textarea>
+
+    <div class="ai-actions">
+      <button class="ghost-btn" id="btnAiExtract">提炼已写内容</button>
+      <button class="ghost-btn" id="btnAiSuggest">补充后续建议</button>
+    </div>
+
+    <div class="section-title">结果（可编辑）</div>
+    <textarea id="aiResult" class="big-area tall" placeholder="生成结果会出现在这里……"></textarea>
+
+    <div class="ai-apply">
+      <button class="ghost-btn" id="btnAiAppend">追加到总纲</button>
+      <button class="ghost-btn danger" id="btnAiReplace">替换总纲</button>
+    </div>
+  </div>
+</div>
 
 <!-- 卷纲编辑 -->
 <div class="modal" id="modalVolumeEdit">
@@ -688,6 +736,7 @@
 <script src="plot.js?v=6"></script>
 <script src="search.js?v=2"></script>
 <script src="outline.js?v=1"></script>
-<script src="app.js?v=23"></script>
+<script src="outline-ai.js?v=1"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>

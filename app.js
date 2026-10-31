@@ -239,7 +239,7 @@ function panModal(el, toOpen, done) {
   mFallback = setTimeout(finish, DUR + 140);
 }
 
-const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts', 'modalDraft', 'modalPlotHistory', 'modalVolumeEdit', 'modalChapOutlineEdit'];
+const MODALS = ['modalSummary', 'modalState', 'modalSettings', 'modalContext', 'modalChapterInfo', 'modalConfirm', 'modalCast', 'modalCharEdit', 'modalWorldEdit', 'modalExtractPick', 'modalExtractReview', 'modalPickTarget', 'modalHistory', 'modalShelf', 'modalBookEdit', 'modalPrompts', 'modalDraft', 'modalPlotHistory', 'modalVolumeEdit', 'modalChapOutlineEdit', 'modalAiOutline'];
 let openModalId = null;
 
 function openModal(id) {
@@ -1677,6 +1677,7 @@ function init() {
 
   // 大纲
   $('btnOutline').addEventListener('click', toggleOutlineMode);
+  if (typeof initOutlineAi === 'function') initOutlineAi();
   document.querySelectorAll('#segOutlineTab button').forEach(b => {
     b.addEventListener('click', () => switchOutlineTab(b.dataset.t));
   });
