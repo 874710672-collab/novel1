@@ -407,6 +407,14 @@ function selectChapter(id) {
   currentChapterId = id;
   db.lastChapterId = id;
   saveDB();
+  // 查找
+  initSearch();
+  $('btnSearch').addEventListener('click', () => {
+    // 剧情模式下查剧情编辑区，否则查正文
+    const inPlot = typeof plotMode !== 'undefined' && plotMode;
+    openSearch(inPlot ? $('plotEditor') : $('editor'));
+  });
+
   // 剧情模式下顶栏要显示「剧情构思中…」
   if (typeof plotMode !== 'undefined' && plotMode && typeof applyPlotTopbar === 'function') {
     setTimeout(applyPlotTopbar, 0);
@@ -1751,6 +1759,26 @@ function init() {
     b.addEventListener('click', () => closeModal()));
 
   document.addEventListener('keydown', e => {
+    // 查找：Cmd+F / Ctrl+F
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      const inPlot = typeof plotMode !== 'undefined' && plotMode;
+      const active = document.activeElement;
+      // 如果焦点在某个输入框里，就查那个框
+      let target = null;
+      if (active && active.tagName === 'TEXTAREA') target = active;
+      else target = inPlot ? $('plotEditor') : $('editor');
+      openSearch(target);
+      return;
+    }
+    // 查找下一个 / 上一个
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'g' || e.key === 'G')) {
+      e.preventDefault();
+      if (!$('searchBar').hidden) {
+        if (e.shiftKey) searchPrev(); else searchNext();
+      }
+      return;
+    }
     if (e.key === 'Escape') {
       if (openModalId) closeModal();
       else closeDrawer();

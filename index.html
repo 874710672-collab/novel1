@@ -11,7 +11,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=28">
+<link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
 
@@ -22,6 +22,7 @@
   <button class="tb-btn mode-btn" id="btnMode" title="切换到剧情抽卡">剧情</button>
   <div class="tb-title" id="chapterTitle">未选择章节</div>
   <div class="tb-right">
+    <button class="tb-btn" id="btnSearch" title="查找">🔍</button>
     <button class="tb-btn" id="btnDraft" title="草稿">✎</button>
     <button class="tb-btn" id="btnSummary" title="生成摘要">摘</button>
     <button class="tb-btn" id="btnCast" title="人设库">人</button>
@@ -30,6 +31,15 @@
     <button class="tb-btn" id="btnSettings" title="设置">⚙</button>
   </div>
 </header>
+
+<!-- ===== 查找栏 ===== -->
+<div class="search-bar" id="searchBar" hidden>
+  <input id="searchInput" class="search-input" type="search" placeholder="查找" autocomplete="off">
+  <span class="search-count" id="searchCount">0/0</span>
+  <button class="search-btn" id="btnSearchPrev" title="上一个">↑</button>
+  <button class="search-btn" id="btnSearchNext" title="下一个">↓</button>
+  <button class="search-btn" id="btnSearchClose" title="关闭">✕</button>
+</div>
 
 <!-- ===== 正文模式 ===== -->
 <div class="mode-root" id="modeNovel">
@@ -585,12 +595,13 @@
 
 <script src="prompts.js?v=1"></script>
 <script src="confirm.js?v=1"></script>
-<script src="cast.js?v=4"></script>
+<script src="cast.js?v=5"></script>
 <script src="history.js?v=1"></script>
 <script src="shelf.js?v=1"></script>
 <script src="prompts-edit.js?v=1"></script>
 <script src="draft.js?v=1"></script>
-<script src="plot.js?v=4"></script>
-<script src="app.js?v=20"></script>
+<script src="plot.js?v=6"></script>
+<script src="search.js?v=1"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
