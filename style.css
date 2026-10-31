@@ -518,6 +518,8 @@ textarea{resize:none;}
 .cast-del:active{color:var(--danger);}
 
 /* ===== 查找栏 ===== */
+.search-bar[hidden]{display:none;}
+
 .search-bar{
   position:fixed;
   top:calc(50px + var(--safe-t));

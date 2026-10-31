@@ -407,14 +407,6 @@ function selectChapter(id) {
   currentChapterId = id;
   db.lastChapterId = id;
   saveDB();
-  // 查找
-  initSearch();
-  $('btnSearch').addEventListener('click', () => {
-    // 剧情模式下查剧情编辑区，否则查正文
-    const inPlot = typeof plotMode !== 'undefined' && plotMode;
-    openSearch(inPlot ? $('plotEditor') : $('editor'));
-  });
-
   // 剧情模式下顶栏要显示「剧情构思中…」
   if (typeof plotMode !== 'undefined' && plotMode && typeof applyPlotTopbar === 'function') {
     setTimeout(applyPlotTopbar, 0);
@@ -1589,6 +1581,13 @@ function init() {
       if (id === 'cfgStyle') s.stylePrompt = el.value;
       saveDB();
     });
+  });
+
+  // 查找（只在这里绑定一次）
+  initSearch();
+  $('btnSearch').addEventListener('click', () => {
+    const inPlot = typeof plotMode !== 'undefined' && plotMode;
+    openSearch(inPlot ? $('plotEditor') : $('editor'));
   });
 
   // 剧情模式
