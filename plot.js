@@ -71,6 +71,13 @@ function plotData() {
 function togglePlotMode() {
   plotMode = !plotMode;
 
+  // 互斥：打开剧情时关掉大纲
+  if (plotMode && typeof outlineMode !== 'undefined' && outlineMode) {
+    outlineMode = false;
+    $('modeOutline').hidden = true;
+    $('btnOutline').classList.remove('on');
+  }
+
   $('modeNovel').hidden = plotMode;
   $('modePlot').hidden = !plotMode;
   $('btnMode').classList.toggle('on', plotMode);
@@ -359,7 +366,11 @@ function buildPlotContext() {
 
   // 当前剧情编辑区（受开关控制）
   if (p.editor && p.editor.trim() && f.includePlot !== false) {
-    parts.push('【当前已有剧情】\n' + p.editor.trim());
+    const c = (typeof currentChapter === 'function') ? currentChapter() : null;
+    const prefix = c
+      ? `【正在构思】第${c.no}章${c.title && c.title !== '未命名' ? '·' + c.title : ''}\n`
+      : '';
+    parts.push(prefix + '【当前已有剧情】\n' + p.editor.trim());
   }
 
   // 本次要素

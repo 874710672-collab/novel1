@@ -173,10 +173,18 @@ const $ = id => document.getElementById(id);
    所以在选区产生时就记下来，抽卡时使用记录值。 */
 let savedSel = { start: 0, end: 0, chapterId: null };
 
-function captureSelection() {
+/**
+ * 记录编辑器选区。
+ * force = true 时无视焦点状态强制读取（用于 selectionchange 持续捕获）
+ * 注意：iOS 上拖动选区句柄时不会触发 touchend，
+ * 必须依赖 selectionchange 才能拿到拖动后的最终范围。
+ */
+function captureSelection(force) {
   const ed = $('editor');
   if (!ed) return;
-  if (document.activeElement !== ed) return;   // 只在自己有焦点时记录
+  // 非强制模式下，只在编辑区持有焦点时记录（避免读到残留选区）
+  if (!force && document.activeElement !== ed) return;
+
   const s = ed.selectionStart;
   const e = ed.selectionEnd;
   if (s == null || e == null) return;
@@ -184,20 +192,26 @@ function captureSelection() {
   const hadSel = !!(savedSel.chapterId && savedSel.end > savedSel.start);
 
   if (e > s) {
+    // 选区必须属于当前章节
     savedSel = { start: s, end: e, chapterId: currentChapterId };
   } else {
-    // 光标收起（没有选中）→ 清掉记录
     if (savedSel.chapterId === currentChapterId) {
       savedSel = { start: 0, end: 0, chapterId: null };
     }
   }
 
-  // 选区状态变了才重绘，避免频繁刷新
   const hasSel = !!(savedSel.chapterId && savedSel.end > savedSel.start);
   if (hadSel !== hasSel) {
     renderCtxChips();
     updateCtxSize();
   }
+}
+
+/* 拖动结束后再读一次，避开中间态 */
+let selDebounce = null;
+function scheduleCapture() {
+  clearTimeout(selDebounce);
+  selDebounce = setTimeout(() => captureSelection(false), 150);
 }
 
 function clearSelectionRecord() {
@@ -1680,12 +1694,17 @@ function init() {
   });
   ed.addEventListener('blur', flushEditor);
 
-  // 选区捕获：鼠标松开、手指抬起、键盘选择、选中变化
-  ed.addEventListener('mouseup', () => setTimeout(captureSelection, 0));
-  ed.addEventListener('touchend', () => setTimeout(captureSelection, 0));
-  ed.addEventListener('keyup', () => setTimeout(captureSelection, 0));
-  ed.addEventListener('select', () => captureSelection());
-  ed.addEventListener('focus', () => setTimeout(captureSelection, 0));
+  // 选区捕获：
+  // - selectionchange 是唯一能在 iOS 拖动句柄时持续触发的
+  // - 其他事件作为补充，并在停手 150ms 后读取最终值
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement === ed) captureSelection(true);
+  });
+  ed.addEventListener('mouseup', scheduleCapture);
+  ed.addEventListener('touchend', scheduleCapture);
+  ed.addEventListener('keyup', scheduleCapture);
+  ed.addEventListener('select', () => captureSelection(true));
+  ed.addEventListener('focus', scheduleCapture);
 
   // 顶栏
   $('btnShelf').addEventListener('click', openDrawer);
