@@ -501,6 +501,7 @@ function selectChapter(id) {
   if (savedSel.chapterId && savedSel.chapterId !== id) {
     savedSel = { start: 0, end: 0, chapterId: null };
   }
+  if (typeof updateSelButton === 'function') updateSelButton();
   // 剧情模式下顶栏要显示「剧情构思中…」
   if (typeof plotMode !== 'undefined' && plotMode && typeof applyPlotTopbar === 'function') {
     setTimeout(applyPlotTopbar, 0);
@@ -1149,7 +1150,6 @@ function copyText(t) {
 }
 
 async function doDraw() {
-  captureSelection(false);   // 兜底：临抽卡前再读一次选区
   const prompt = $('promptInput').value.trim();
   if (!prompt) { toast('先写点提示词'); return; }
   if (drawAbort) { toast('正在抽卡中…'); return; }
@@ -1713,27 +1713,15 @@ function init() {
   });
   ed.addEventListener('blur', flushEditor);
 
+  // 「用选中」按钮：点击时立即读取选区并锁定
+  $('btnUseSel').addEventListener('click', useSelectionNow);
+
   // 选区捕获：
   // - selectionchange 是唯一能在 iOS 拖动句柄时持续触发的
   // - 其他事件作为补充，并在停手 150ms 后读取最终值
-  document.addEventListener('selectionchange', () => {
-    captureSelection(false);
-  });
-  // 双击 / 长按选词后，开启一段轮询，捕捉拖动过程的每一次变化
-  ed.addEventListener('touchend', () => {
-    scheduleCapture();
-    startSelectionPoll(4000);
-  });
-  ed.addEventListener('mouseup', () => {
-    scheduleCapture();
-    startSelectionPoll(2000);
-  });
-  ed.addEventListener('keyup', scheduleCapture);
-  ed.addEventListener('select', () => {
-    captureSelection(false);
-    startSelectionPoll(2000);
-  });
-  ed.addEventListener('focus', scheduleCapture);
+  // 选区改为「手动锁定」：由「用选中」按钮明确触发。
+  // 自动捕获在 iOS 上不可靠（拖动句柄时事件缺失），已关闭。
+  // 保留 captureSelection 供按钮和兜底读取使用。
 
   // 顶栏
   $('btnShelf').addEventListener('click', openDrawer);
@@ -1755,7 +1743,6 @@ function init() {
 
   $('btnSettings').addEventListener('click', openSettings);
   $('btnContext').addEventListener('click', () => {
-    captureSelection(false);   // 兜底：打开面板前再读一次
     renderCtxLists();
     $('ctxStyle').checked = db.ctx.style;
     $('ctxState').checked = db.ctx.state;
@@ -2105,3 +2092,60 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+/* ===== 用选中：明确的选区指定按钮 =====
+   iOS 的选区事件不可靠，所以给一个按钮：
+   用户选好文字 → 点按钮 → 立即读取并锁定范围。 */
+
+function useSelectionNow() {
+  const ed = $('editor');
+  if (!ed) return;
+
+  const hasLocked = !!(savedSel.chapterId
+    && savedSel.end > savedSel.start
+    && savedSel.chapterId === currentChapterId);
+
+  // 已经锁定着 → 再点一次就是取消（不依赖实时选区，因为失焦后选区会没）
+  if (hasLocked) {
+    clearSelSilently();
+    toast('已改为使用整章');
+    return;
+  }
+
+  const s = ed.selectionStart;
+  const e = ed.selectionEnd;
+
+  if (s == null || e == null || e === s) {
+    toast('先在正文里选中一段文字，再点这个按钮');
+    return;
+  }
+
+  savedSel = { start: s, end: e, chapterId: currentChapterId };
+  const words = countWords(ed.value.slice(s, e));
+  saveDB();
+  renderCtxChips();
+  updateCtxSize();
+  updateSelButton();
+  toast(`已锁定选区（${words} 字），抽卡将只带这一段`);
+}
+
+function clearSelSilently() {
+  savedSel = { start: 0, end: 0, chapterId: null };
+  renderCtxChips();
+  updateCtxSize();
+  updateSelButton();
+}
+
+/* 按钮在「有选区记录」时高亮 */
+function updateSelButton() {
+  const btn = $('btnUseSel');
+  if (!btn) return;
+  const has = !!(savedSel.chapterId && savedSel.end > savedSel.start && savedSel.chapterId === currentChapterId);
+  btn.classList.toggle('on', has);
+  if (has) {
+    const words = countWords(($('editor').value || '').slice(savedSel.start, savedSel.end));
+    btn.textContent = `选中${words}字`;
+  } else {
+    btn.textContent = '用选中';
+  }
+}

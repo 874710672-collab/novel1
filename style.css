@@ -120,6 +120,20 @@ textarea{resize:none;}
   border-bottom:1px solid var(--line);
 }
 .pane-label{font-size:11.5px;letter-spacing:.09em;color:var(--text-3);flex:0 0 auto;}
+.sel-btn{
+  flex:0 0 auto;
+  font-size:10.5px;
+  padding:3px 8px;
+  border-radius:6px;
+  background:var(--panel);
+  color:var(--text-3);
+  white-space:nowrap;
+}
+.sel-btn:active{background:var(--panel-2);color:var(--text);}
+.sel-btn.on{
+  background:rgba(255,184,122,.18);
+  color:var(--warm);
+}
 .stale-badge{
   font-size:10.5px;
   color:var(--warm);
