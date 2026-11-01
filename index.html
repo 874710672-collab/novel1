@@ -11,7 +11,7 @@
 <title>抽卡写小说</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=37">
 </head>
 <body>
 
@@ -50,7 +50,6 @@
   <section class="pane pane-edit" id="paneEdit">
     <div class="pane-head">
       <span class="pane-label">正文编辑</span>
-      <button class="sel-btn" id="btnUseSel" title="把当前选中的文字设为抽卡用的「当前正文」">用选中</button>
       <span class="stale-badge" id="staleBadge" hidden></span>
       <span class="wordcount" id="wordCount">0 字</span>
     </div>
@@ -64,7 +63,10 @@
   <section class="pane pane-draw" id="paneDraw">
     <div class="pane-head">
       <span class="pane-label">抽卡</span>
-      <button class="mini-btn" id="btnContext" title="上下文">上下文</button>
+      <div class="pane-head-actions">
+        <button class="sel-btn" id="btnUseSel" title="把正文里选中的文字设为抽卡用的「当前正文」">用选中</button>
+        <button class="mini-btn" id="btnContext" title="上下文">上下文</button>
+      </div>
     </div>
 
     <div class="ctx-chips" id="ctxChips"></div>
