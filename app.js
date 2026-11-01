@@ -182,8 +182,6 @@ let savedSel = { start: 0, end: 0, chapterId: null };
 function captureSelection(force) {
   const ed = $('editor');
   if (!ed) return;
-  // 非强制模式下，只在编辑区持有焦点时记录（避免读到残留选区）
-  if (!force && document.activeElement !== ed) return;
 
   const s = ed.selectionStart;
   const e = ed.selectionEnd;
@@ -191,10 +189,13 @@ function captureSelection(force) {
 
   const hadSel = !!(savedSel.chapterId && savedSel.end > savedSel.start);
 
+  // 只有真的选中时才写入记录。
+  // 注意：不再判断 activeElement —— iOS 双击选词后 textarea 可能短暂失焦，
+  // 之前正是这个判断挡住了拖动手柄过程中的所有事件。
   if (e > s) {
-    // 选区必须属于当前章节
     savedSel = { start: s, end: e, chapterId: currentChapterId };
-  } else {
+  } else if (force) {
+    // 只有强制读取时才允许清空，避免拖动途中的瞬时空选区把记录冲掉
     if (savedSel.chapterId === currentChapterId) {
       savedSel = { start: 0, end: 0, chapterId: null };
     }
@@ -205,6 +206,23 @@ function captureSelection(force) {
     renderCtxChips();
     updateCtxSize();
   }
+}
+
+/* 拖动选区时轮询捕捉（iOS 的 selectionchange 在拖手柄时不总是触发） */
+let selPoller = null;
+let selPollEnd = 0;
+
+function startSelectionPoll(duration) {
+  selPollEnd = Date.now() + (duration || 3000);
+  if (selPoller) return;
+  selPoller = setInterval(() => {
+    const ed = $('editor');
+    if (ed) captureSelection(false);
+    if (Date.now() > selPollEnd) {
+      clearInterval(selPoller);
+      selPoller = null;
+    }
+  }, 120);
 }
 
 /* 拖动结束后再读一次，避开中间态 */
@@ -1131,6 +1149,7 @@ function copyText(t) {
 }
 
 async function doDraw() {
+  captureSelection(false);   // 兜底：临抽卡前再读一次选区
   const prompt = $('promptInput').value.trim();
   if (!prompt) { toast('先写点提示词'); return; }
   if (drawAbort) { toast('正在抽卡中…'); return; }
@@ -1698,12 +1717,22 @@ function init() {
   // - selectionchange 是唯一能在 iOS 拖动句柄时持续触发的
   // - 其他事件作为补充，并在停手 150ms 后读取最终值
   document.addEventListener('selectionchange', () => {
-    if (document.activeElement === ed) captureSelection(true);
+    captureSelection(false);
   });
-  ed.addEventListener('mouseup', scheduleCapture);
-  ed.addEventListener('touchend', scheduleCapture);
+  // 双击 / 长按选词后，开启一段轮询，捕捉拖动过程的每一次变化
+  ed.addEventListener('touchend', () => {
+    scheduleCapture();
+    startSelectionPoll(4000);
+  });
+  ed.addEventListener('mouseup', () => {
+    scheduleCapture();
+    startSelectionPoll(2000);
+  });
   ed.addEventListener('keyup', scheduleCapture);
-  ed.addEventListener('select', () => captureSelection(true));
+  ed.addEventListener('select', () => {
+    captureSelection(false);
+    startSelectionPoll(2000);
+  });
   ed.addEventListener('focus', scheduleCapture);
 
   // 顶栏
@@ -1726,6 +1755,7 @@ function init() {
 
   $('btnSettings').addEventListener('click', openSettings);
   $('btnContext').addEventListener('click', () => {
+    captureSelection(false);   // 兜底：打开面板前再读一次
     renderCtxLists();
     $('ctxStyle').checked = db.ctx.style;
     $('ctxState').checked = db.ctx.state;
