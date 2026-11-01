@@ -168,6 +168,60 @@ function getSettings() {
 /* ---------- 工具 ---------- */
 const $ = id => document.getElementById(id);
 
+/* 编辑器选区记录：
+   点击右侧面板会让编辑区失焦、选区消失，
+   所以在选区产生时就记下来，抽卡时使用记录值。 */
+let savedSel = { start: 0, end: 0, chapterId: null };
+
+function captureSelection() {
+  const ed = $('editor');
+  if (!ed) return;
+  if (document.activeElement !== ed) return;   // 只在自己有焦点时记录
+  const s = ed.selectionStart;
+  const e = ed.selectionEnd;
+  if (s == null || e == null) return;
+
+  const hadSel = !!(savedSel.chapterId && savedSel.end > savedSel.start);
+
+  if (e > s) {
+    savedSel = { start: s, end: e, chapterId: currentChapterId };
+  } else {
+    // 光标收起（没有选中）→ 清掉记录
+    if (savedSel.chapterId === currentChapterId) {
+      savedSel = { start: 0, end: 0, chapterId: null };
+    }
+  }
+
+  // 选区状态变了才重绘，避免频繁刷新
+  const hasSel = !!(savedSel.chapterId && savedSel.end > savedSel.start);
+  if (hadSel !== hasSel) {
+    renderCtxChips();
+    updateCtxSize();
+  }
+}
+
+function clearSelectionRecord() {
+  savedSel = { start: 0, end: 0, chapterId: null };
+  renderCtxChips();
+  updateCtxSize();
+}
+
+/* 取得当前应作为「当前正文」的内容与标签 */
+function currentEditorContent() {
+  const ed = $('editor');
+  const full = ed.value || '';
+  // 选区必须属于当前章节，且位置有效
+  if (savedSel.chapterId && savedSel.chapterId === currentChapterId) {
+    const a = Math.max(0, Math.min(savedSel.start, full.length));
+    const b = Math.max(0, Math.min(savedSel.end, full.length));
+    if (b > a) {
+      const txt = full.slice(a, b).trim();
+      if (txt) return { text: txt, isSelection: true, words: countWords(txt) };
+    }
+  }
+  return { text: full.trim(), isSelection: false, words: countWords(full) };
+}
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -411,6 +465,10 @@ function selectChapter(id) {
   currentChapterId = id;
   db.lastChapterId = id;
   saveDB();
+  // 切章后旧选区失效
+  if (savedSel.chapterId && savedSel.chapterId !== id) {
+    savedSel = { start: 0, end: 0, chapterId: null };
+  }
   // 剧情模式下顶栏要显示「剧情构思中…」
   if (typeof plotMode !== 'undefined' && plotMode && typeof applyPlotTopbar === 'function') {
     setTimeout(applyPlotTopbar, 0);
@@ -543,16 +601,45 @@ function renderCtxChips() {
   const box = $('ctxChips');
   box.innerHTML = '';
 
+  const cur = currentEditorContent();
   const items = [
     { k: 'style', label: '文风' },
-    { k: 'state', label: '状态文件' },
-    { k: 'editor', label: '当前正文' }
+    { k: 'state', label: '状态文件' }
   ];
-
   for (const it of items) {
     const el = document.createElement('span');
     el.className = 'chip ' + (db.ctx[it.k] ? 'on' : 'off');
     el.textContent = it.label;
+    box.appendChild(el);
+  }
+
+  // 当前正文：有选区时单独标注，并可点击清除
+  if (db.ctx.editor) {
+    const el = document.createElement('span');
+    if (cur.isSelection) {
+      el.className = 'chip on sel-chip';
+      el.textContent = `当前正文·选中${cur.words}字`;
+      el.title = '只带选中的部分，点击改为整章';
+      el.addEventListener('click', () => {
+        clearSelectionRecord();
+        toast('已改为使用整章');
+      });
+    } else {
+      el.className = 'chip on';
+      el.textContent = '当前正文';
+    }
+    box.appendChild(el);
+  } else {
+    const el = document.createElement('span');
+    el.className = 'chip off';
+    el.textContent = '当前正文';
+    box.appendChild(el);
+  }
+
+  if (db.ctx.master !== false) {
+    const el = document.createElement('span');
+    el.className = 'chip on';
+    el.textContent = '总纲';
     box.appendChild(el);
   }
 
@@ -637,10 +724,10 @@ function calcCtxSize() {
       .map(c => c.body.trim());
     if (refs.length) parts.push(refs.join('\n\n'));
   }
-  // 当前正文随输入实时变化
+  // 当前正文随输入实时变化（有选区时只算选区）
   if (db.ctx.editor) {
-    const cur = ($('editor') ? $('editor').value : '').trim();
-    if (cur) parts.push(cur);
+    const cur = currentEditorContent();
+    if (cur.text) parts.push(cur.text);
   }
 
   const text = parts.join('\n\n');
@@ -871,8 +958,16 @@ function buildContext() {
   }
 
   if (db.ctx.editor) {
-    const cur = $('editor').value.trim();
-    if (cur) parts.push('【当前章节】\n' + cur);
+    const cur = currentEditorContent();
+    if (cur.text) {
+      const c = currentChapter();
+      const label = c ? `第${c.no}章${c.title && c.title !== '未命名' ? '·' + c.title : ''}` : '当前章节';
+      if (cur.isSelection) {
+        parts.push(`【${label} · 选中的段落】\n${cur.text}`);
+      } else {
+        parts.push(`【${label} 全文】\n${cur.text}`);
+      }
+    }
   }
 
   return parts.join('\n\n');
@@ -1585,6 +1680,13 @@ function init() {
   });
   ed.addEventListener('blur', flushEditor);
 
+  // 选区捕获：鼠标松开、手指抬起、键盘选择、选中变化
+  ed.addEventListener('mouseup', () => setTimeout(captureSelection, 0));
+  ed.addEventListener('touchend', () => setTimeout(captureSelection, 0));
+  ed.addEventListener('keyup', () => setTimeout(captureSelection, 0));
+  ed.addEventListener('select', () => captureSelection());
+  ed.addEventListener('focus', () => setTimeout(captureSelection, 0));
+
   // 顶栏
   $('btnShelf').addEventListener('click', openDrawer);
   $('overlay').addEventListener('click', closeDrawer);
@@ -1610,6 +1712,22 @@ function init() {
     $('ctxState').checked = db.ctx.state;
     $('ctxEditor').checked = db.ctx.editor;
     $('ctxMaster').checked = db.ctx.master !== false;
+
+    // 选区提示
+    const cur = currentEditorContent();
+    const hint = $('ctxSelHint');
+    if (cur.isSelection) {
+      hint.hidden = false;
+      hint.innerHTML = `检测到选区（${cur.words} 字），将只使用<b>选中部分</b>，不带整章。<span class="link-like" id="lnkClearSel">改用整章</span>`;
+      const lnk = $('lnkClearSel');
+      if (lnk) lnk.addEventListener('click', () => {
+        clearSelectionRecord();
+        hint.hidden = true;
+      });
+    } else {
+      hint.hidden = true;
+    }
+
     openModal('modalContext');
   });
 

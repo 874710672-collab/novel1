@@ -190,6 +190,12 @@ textarea{resize:none;}
   white-space:nowrap;
 }
 .chip.on{background:var(--accent-soft);color:var(--accent);}
+.chip.sel-chip{
+  background:rgba(255,184,122,.16);
+  color:var(--warm);
+  cursor:pointer;
+}
+.chip.sel-chip::after{content:' ✕';font-size:9px;opacity:.7;}
 .chip.off{opacity:.45;text-decoration:line-through;}
 
 .ctx-size{
@@ -1111,4 +1117,11 @@ textarea{resize:none;}
     border-radius:20px 20px 0 0;
     max-height:86vh;
   }
+}
+
+.link-like{
+  color:var(--accent);
+  text-decoration:underline;
+  margin-left:6px;
+  cursor:pointer;
 }
