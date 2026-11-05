@@ -43,15 +43,69 @@ function defaultBookData() {
 
 function defaultSettings() {
   return {
-    base: 'https://api.deepseek.com/v1',
+    // 两套模型配置，各自独立
+    providers: {
+      deepseek: {
+        label: 'DeepSeek',
+        base: 'https://api.deepseek.com/v1',
+        key: '',
+        model: 'deepseek-chat',
+        thinkingOff: false,      // 不支持，仅占位
+        supportsThinking: false
+      },
+      doubao: {
+        label: '豆包',
+        base: 'https://ark.cn-beijing.volces.com/api/v3',
+        key: '',
+        model: 'doubao-seed-2-1-pro-260915',
+        thinkingOff: true,       // 豆包默认开启思考，这里可关
+        supportsThinking: true
+      }
+    },
+    activeProvider: 'deepseek',  // 当前使用哪一个
+
+    // 兼容旧字段（迁移用）
+    base: '',
     key: '',
-    model: 'deepseek-chat',
+    model: '',
+
     temperature: 1.0,
     stylePrompt: (typeof DEFAULT_STYLE_PROMPT !== 'undefined' ? DEFAULT_STYLE_PROMPT : ''),
-    summaryPrompt: '',      // 空 = 用内置默认
-    statePromptBody: '',    // 空 = 用内置默认
-    plotPrompt: ''          // 空 = 用内置默认
+    summaryPrompt: '',
+    statePromptBody: '',
+    plotPrompt: ''
   };
+}
+
+/* 取当前生效的模型配置 */
+function activeModel() {
+  const s = getSettings();
+  const id = s.activeProvider || 'deepseek';
+  return s.providers && s.providers[id] ? s.providers[id] : null;
+}
+
+/* 旧版单模型配置 → 迁移进 providers.deepseek */
+function migrateSettings(st) {
+  if (!st.providers) {
+    st.providers = defaultSettings().providers;
+    if (st.base || st.key || st.model) {
+      st.providers.deepseek.base = st.base || st.providers.deepseek.base;
+      st.providers.deepseek.key = st.key || '';
+      st.providers.deepseek.model = st.model || 'deepseek-chat';
+    }
+    st.activeProvider = 'deepseek';
+  } else {
+    // 补齐可能缺失的字段
+    const d = defaultSettings().providers;
+    for (const k of ['deepseek', 'doubao']) {
+      st.providers[k] = Object.assign({}, d[k], st.providers[k] || {});
+    }
+    if (!st.activeProvider) st.activeProvider = 'deepseek';
+  }
+  delete st.base;
+  delete st.key;
+  delete st.model;
+  return st;
 }
 
 function defaultShelf() {
@@ -91,6 +145,7 @@ function loadShelf() {
       const parsed = JSON.parse(raw);
       shelf = Object.assign(defaultShelf(), parsed);
       shelf.settings = Object.assign(defaultSettings(), parsed.settings || {});
+      shelf.settings = migrateSettings(shelf.settings);
       shelf.books = (parsed.books || []).map(b => ({
         id: b.id,
         title: b.title || '未命名',
@@ -1007,28 +1062,38 @@ function buildContext() {
 }
 
 /* ===== API 调用（流式） ===== */
-async function callModel(systemMsg, userMsg, onChunk, signal) {
+async function callModel(systemMsg, userMsg, onChunk, signal, tempOverride) {
   const s = getSettings();
-  if (!s.base || !s.model) throw new Error('请先到设置里填写接口地址和模型');
-  if (!s.key) throw new Error('请先到设置里填写 API Key');
+  const m = activeModel();
+  if (!m) throw new Error('模型配置缺失，请到设置里检查');
+  if (!m.base || !m.model) throw new Error('请先到设置里填写接口地址和模型');
+  if (!m.key) throw new Error('请先到设置里填写 API Key');
 
-  const url = s.base.replace(/\/+$/, '') + '/chat/completions';
+  const url = m.base.replace(/\/+$/, '') + '/chat/completions';
+
+  const body = {
+    model: m.model,
+    stream: true,
+    temperature: typeof tempOverride === 'number' ? tempOverride : s.temperature,
+    messages: [
+      { role: 'system', content: systemMsg },
+      { role: 'user', content: userMsg }
+    ]
+  };
+
+  // 豆包：思考开关（默认开启，勾了就传 disabled）
+  if (m.supportsThinking) {
+    body.thinking = { type: m.thinkingOff ? 'disabled' : 'enabled' };
+  }
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + s.key
+      'Authorization': 'Bearer ' + m.key
     },
     signal,
-    body: JSON.stringify({
-      model: s.model,
-      stream: true,
-      temperature: s.temperature,
-      messages: [
-        { role: 'system', content: systemMsg },
-        { role: 'user', content: userMsg }
-      ]
-    })
+    body: JSON.stringify(body)
   });
 
   if (!res.ok) {
@@ -1036,11 +1101,11 @@ async function callModel(systemMsg, userMsg, onChunk, signal) {
     throw new Error(`HTTP ${res.status} ${txt.slice(0, 200)}`);
   }
 
-  // 流式解析
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let full = '';
+  let reasoningLen = 0;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -1057,12 +1122,22 @@ async function callModel(systemMsg, userMsg, onChunk, signal) {
       try {
         const json = JSON.parse(data);
         const delta = json.choices && json.choices[0] && json.choices[0].delta;
-        const piece = delta && (delta.content || '');
+        if (!delta) continue;
+
+        // 思考内容：只统计长度，不显示
+        if (delta.reasoning_content) {
+          reasoningLen += String(delta.reasoning_content).length;
+        }
+
+        const piece = delta.content || '';
         if (piece) {
           full += piece;
-          onChunk && onChunk(full);
+          onChunk && onChunk(full, reasoningLen);
+        } else if (reasoningLen && onChunk) {
+          // 还在思考，没出正文：只更新思考提示
+          onChunk('', reasoningLen);
         }
-      } catch (e) { /* 忽略不完整分片 */ }
+      } catch (e) {}
     }
   }
   return full;
@@ -1076,52 +1151,76 @@ let lastCards = [];
 function renderCards() {
   const box = $('cards');
   box.innerHTML = '';
+
   for (const c of lastCards) {
     const el = document.createElement('div');
     el.className = 'card' + (c.streaming ? ' streaming' : '');
+
     if (c.streaming) {
-      el.innerHTML = `
-        <div class="card-loading">
-          <span class="dot-pulse"><i></i><i></i><i></i></span>
-          <span>${c.text ? countWords(c.text) + ' 字…' : '生成中…'}</span>
-        </div>
-        <div class="card-text">${escapeHtml(c.text || '')}</div>`;
+      const loading = document.createElement('div');
+      loading.className = 'card-loading';
+      loading.innerHTML = '<span class="dot-pulse"><i></i><i></i><i></i></span>';
+      const label = document.createElement('span');
+      label.textContent = c.text ? countWords(c.text) + ' 字…' : '生成中…';
+      loading.appendChild(label);
+      el.appendChild(loading);
+
+      const t = document.createElement('div');
+      t.className = 'card-text';
+      t.textContent = c.text || '';
+      el.appendChild(t);
     } else if (c.error) {
-      el.innerHTML = `<div style="color:var(--danger);font-size:13px">${escapeHtml(c.error)}</div>
-        <div class="card-foot"><span class="card-meta">第 ${c.seq} 张</span></div>`;
+      const e = document.createElement('div');
+      e.style.color = 'var(--danger)';
+      e.style.fontSize = '13px';
+      e.textContent = c.error;
+      el.appendChild(e);
+      const foot = document.createElement('div');
+      foot.className = 'card-foot';
+      const meta = document.createElement('span');
+      meta.className = 'card-meta';
+      meta.textContent = `第 ${c.seq} 张`;
+      foot.appendChild(meta);
+      el.appendChild(foot);
     } else {
       const t = document.createElement('div');
       t.className = 'card-text';
       t.textContent = c.text;
+      el.appendChild(t);
+
       const foot = document.createElement('div');
       foot.className = 'card-foot';
-      foot.innerHTML =
-        `<span class="card-meta">第 ${c.seq} 张 · ${countWords(c.text)} 字</span>` +
-        `<button class="card-btn primary" data-act="insert" data-i="${c.seq}">插入正文</button>` +
-        `<button class="card-btn" data-act="copy" data-i="${c.seq}">复制</button>` +
-        `<button class="card-btn" data-act="drop" data-i="${c.seq}">丢弃</button>`;
-      el.appendChild(t);
+      const meta = document.createElement('span');
+      meta.className = 'card-meta';
+      meta.textContent = `第 ${c.seq} 张 · ${countWords(c.text)} 字`;
+      foot.appendChild(meta);
+
+      const bIns = document.createElement('button');
+      bIns.className = 'card-btn primary';
+      bIns.textContent = '插入正文';
+      bIns.addEventListener('click', () => insertToEditor(c.text));
+
+      const bCopy = document.createElement('button');
+      bCopy.className = 'card-btn';
+      bCopy.textContent = '复制';
+      bCopy.addEventListener('click', () => copyText(c.text));
+
+      const bDrop = document.createElement('button');
+      bDrop.className = 'card-btn';
+      bDrop.textContent = '丢弃';
+      bDrop.addEventListener('click', () => {
+        lastCards = lastCards.filter(x => x.seq !== c.seq);
+        renderCards();
+      });
+
+      foot.appendChild(bIns);
+      foot.appendChild(bCopy);
+      foot.appendChild(bDrop);
       el.appendChild(foot);
     }
+
     box.appendChild(el);
   }
-
-  box.querySelectorAll('[data-act]').forEach(b => {
-    b.addEventListener('click', () => {
-      const idx = Number(b.dataset.i) - 1;
-      const card = lastCards.find(c => c.seq === idx + 1);
-      if (!card) return;
-      if (b.dataset.act === 'insert') insertToEditor(card.text);
-      if (b.dataset.act === 'copy') copyText(card.text);
-      if (b.dataset.act === 'drop') {
-        // 丢弃时不删历史记录，只从当前视野移除；历史里仍可找回
-        lastCards = lastCards.filter(c => c.seq !== card.seq);
-        renderCards();
-      }
-    });
-  });
-
-  // 滚动到底部让新卡可见
   box.scrollTop = box.scrollHeight;
 }
 
@@ -1132,12 +1231,16 @@ function insertToEditor(text) {
   ed.value = cur + needNL + text;
   updateWordCount();
   flushEditor();
+  updateCtxSize();
   toast('已插入正文');
 }
 
 function copyText(t) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(t).then(() => toast('已复制'), () => toast('复制失败'));
+    navigator.clipboard.writeText(t).then(
+      () => toast('已复制'),
+      () => toast('复制失败')
+    );
   } else {
     const ta = document.createElement('textarea');
     ta.value = t;
@@ -1168,22 +1271,23 @@ async function doDraw() {
   }));
   renderCards();
 
-  // N 张并发、彼此独立
   const tasks = lastCards.map(async card => {
     try {
       const full = await callModel(
         system,
         prompt,
-        txt => {
+        (txt, rlen) => {
           card.text = txt;
-          // 轻量更新，不整块重绘
           const box = $('cards');
           const el = box.children[card.seq - 1];
           if (el) {
             const t = el.querySelector('.card-text');
             if (t) t.textContent = txt;
             const l = el.querySelector('.card-loading span:last-child');
-            if (l) l.textContent = countWords(txt) + ' 字…';
+            if (l) {
+              if (!txt && rlen) l.textContent = `思考中…（${rlen} 字）`;
+              else l.textContent = countWords(txt) + ' 字…';
+            }
           }
         },
         drawAbort.signal
@@ -1191,7 +1295,6 @@ async function doDraw() {
       card.text = full;
       card.streaming = false;
       if (full.trim()) {
-        // 历史卡片带完整信息，同时保留提示词与生成参数便于回看
         const rec = {
           id: uid(),
           text: full,
@@ -1202,7 +1305,6 @@ async function doDraw() {
           createdAt: Date.now()
         };
         db.cards.push(rec);
-        card.historyId = rec.id;
         saveDB();
       }
     } catch (e) {
@@ -1589,41 +1691,76 @@ function updateStorageHint() {
 /* ===== 设置 ===== */
 function openSettings() {
   const s = getSettings();
-  $('cfgBase').value = s.base || '';
-  const kf = $('cfgKey');
-  kf.type = 'password';
-  kf.value = s.key || '';
-  const eye = $('btnToggleKey');
-  if (eye) { eye.textContent = '◎'; eye.title = '显示'; }
-  $('cfgModel').value = s.model || '';
+  const pid = s.activeProvider || 'deepseek';
+  document.querySelectorAll('#segProvider button').forEach(b => {
+    b.classList.toggle('on', b.dataset.p === pid);
+  });
+  fillProviderFields(pid);
+
   $('cfgStyle').value = s.stylePrompt || '';
   updateStorageHint();
   openModal('modalSettings');
 }
 
+/* 把某个 provider 的配置填进输入框 */
+function fillProviderFields(pid) {
+  const s = getSettings();
+  const p = s.providers[pid];
+  if (!p) return;
+
+  $('cfgBase').value = p.base || '';
+  const kf = $('cfgKey');
+  kf.type = 'password';
+  kf.value = p.key || '';
+  const eye = $('btnToggleKey');
+  if (eye) { eye.textContent = '◎'; eye.title = '显示'; }
+  $('cfgModel').value = p.model || '';
+
+  // 思考开关：只有支持思考的模型才显示
+  const row = $('rowThinking');
+  const hint = $('thinkingHint');
+  if (p.supportsThinking) {
+    row.hidden = false;
+    row.style.display = 'flex';
+    hint.hidden = false;
+    $('cfgThinkingOff').checked = !!p.thinkingOff;
+  } else {
+    row.hidden = true;
+    row.style.display = 'none';
+    hint.hidden = true;
+  }
+}
+
 /* 把已保存的设置回填到输入框 */
 function refreshSettingsFields() {
   const s = getSettings();
+  const pid = s.activeProvider || 'deepseek';
+  const p = s.providers[pid];
+  if (!p) return;
   const b = $('cfgBase'), k = $('cfgKey'), m = $('cfgModel'), st = $('cfgStyle');
-  if (b && document.activeElement !== b) b.value = s.base || '';
-  if (k && document.activeElement !== k) k.value = s.key || '';
-  if (m && document.activeElement !== m) m.value = s.model || '';
+  if (b && document.activeElement !== b) b.value = p.base || '';
+  if (k && document.activeElement !== k) k.value = p.key || '';
+  if (m && document.activeElement !== m) m.value = p.model || '';
   if (st && document.activeElement !== st) st.value = s.stylePrompt || '';
 }
 
 function readSettings() {
   const s = getSettings();
+  const pid = s.activeProvider || 'deepseek';
+  const p = s.providers[pid];
+  if (!p) return;
 
   const base = $('cfgBase').value.trim();
   const key = $('cfgKey').value.trim();
   const model = $('cfgModel').value.trim();
   const style = $('cfgStyle').value;
 
-  // 输入框可能因系统安全策略未回填，空值不能覆盖已有设置
-  if (base) s.base = base;
-  if (key) s.key = key;
-  if (model) s.model = model;
+  // 空值不能覆盖已有设置（iOS 密码框可能不回填）
+  if (base) p.base = base;
+  if (key) p.key = key;
+  if (model) p.model = model;
   if (style) s.stylePrompt = style;
+  if (p.supportsThinking) p.thinkingOff = $('cfgThinkingOff').checked;
 
   saveDB();
 }
@@ -1631,11 +1768,17 @@ function readSettings() {
 async function testConnection() {
   readSettings();
   const btn = $('btnTest');
+  const m = activeModel();
   btn.textContent = '测试中…';
   btn.disabled = true;
   try {
-    const out = await callModel('你是一个测试助手。', '回复两个字：正常', null, null);
-    toast('连接成功：' + out.slice(0, 20));
+    const out = await callModel(
+      '你是一个测试助手。',
+      '回复两个字：正常',
+      null,
+      null
+    );
+    toast(`${m.label} 连接成功：${out.slice(0, 20)}`);
   } catch (e) {
     toast('失败：' + e.message);
   } finally {
@@ -1806,27 +1949,49 @@ function init() {
   $('btnUpdateState').addEventListener('click', updateState);
   $('btnSaveState').addEventListener('click', saveState);
 
+  // 模型切换
+  document.querySelectorAll('#segProvider button').forEach(b => {
+    b.addEventListener('click', () => {
+      readSettings();          // 先把当前输入存进旧 provider
+      const s = getSettings();
+      s.activeProvider = b.dataset.p;
+      saveDB();
+      document.querySelectorAll('#segProvider button').forEach(x => {
+        x.classList.toggle('on', x.dataset.p === b.dataset.p);
+      });
+      fillProviderFields(b.dataset.p);
+      toast(`已切换到 ${s.providers[b.dataset.p].label}`);
+    });
+  });
+
+  // 思考开关
+  $('cfgThinkingOff').addEventListener('change', () => {
+    const s = getSettings();
+    const p = s.providers[s.activeProvider || 'deepseek'];
+    if (p && p.supportsThinking) {
+      p.thinkingOff = $('cfgThinkingOff').checked;
+      saveDB();
+      toast($('cfgThinkingOff').checked ? '已关闭思考' : '已开启思考');
+    }
+  });
+
   // 设置：输入即保存，避免关闭时读空值把配置清掉
   ['cfgBase', 'cfgKey', 'cfgModel', 'cfgStyle'].forEach(id => {
     const el = $(id);
     if (!el) return;
-    el.addEventListener('input', () => {
+    const apply = () => {
       const s = getSettings();
-      if (id === 'cfgBase') s.base = el.value.trim();
-      if (id === 'cfgKey') s.key = el.value.trim();
-      if (id === 'cfgModel') s.model = el.value.trim();
+      const p = s.providers[s.activeProvider || 'deepseek'];
+      if (!p) return;
+      if (id === 'cfgBase') p.base = el.value.trim();
+      if (id === 'cfgKey') p.key = el.value.trim();
+      if (id === 'cfgModel') p.model = el.value.trim();
       if (id === 'cfgStyle') s.stylePrompt = el.value;
       saveDB();
-      if (id === 'cfgStyle' || id === 'cfgBase' || id === 'cfgModel') updateCtxSize();
-    });
-    el.addEventListener('change', () => {
-      const s = getSettings();
-      if (id === 'cfgBase') s.base = el.value.trim();
-      if (id === 'cfgKey') s.key = el.value.trim();
-      if (id === 'cfgModel') s.model = el.value.trim();
-      if (id === 'cfgStyle') s.stylePrompt = el.value;
-      saveDB();
-    });
+      if (id === 'cfgStyle') updateCtxSize();
+    };
+    el.addEventListener('input', apply);
+    el.addEventListener('change', apply);
   });
 
   // 大纲
