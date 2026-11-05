@@ -408,6 +408,12 @@
     <span class="modal-save-space"></span>
   </div>
   <div class="modal-body">
+    <div class="section-title" style="margin-top:0">当前使用的模型</div>
+    <div class="seg seg-wide" id="segProvider">
+      <button data-p="deepseek" class="on">DeepSeek</button>
+      <button data-p="doubao">豆包</button>
+    </div>
+
     <div class="field"><label>接口地址</label><input id="cfgBase" placeholder="https://api.deepseek.com/v1"></div>
     <div class="field">
       <label>API Key</label>
@@ -415,6 +421,13 @@
       <button class="eye-btn" id="btnToggleKey" type="button" title="隐藏">◉</button>
     </div>
     <div class="field"><label>模型</label><input id="cfgModel" placeholder="deepseek-chat"></div>
+
+    <div class="switch-row" id="rowThinking">
+      <span>关闭思考</span>
+      <input type="checkbox" id="cfgThinkingOff">
+    </div>
+    <p class="hint" id="thinkingHint" style="margin:-2px 0 10px">豆包默认开启思考，勾选后关闭，速度更快。</p>
+
     <button class="ghost-btn full" id="btnTest">测试连接</button>
 
     <div class="section-title">文风要求（每次抽卡都会带上）</div>
@@ -737,10 +750,10 @@
 <script src="shelf.js?v=1"></script>
 <script src="prompts-edit.js?v=1"></script>
 <script src="draft.js?v=1"></script>
-<script src="plot.js?v=7"></script>
+<script src="plot.js?v=8"></script>
 <script src="search.js?v=2"></script>
 <script src="outline.js?v=1"></script>
 <script src="outline-ai.js?v=1"></script>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>
