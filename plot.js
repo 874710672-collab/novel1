@@ -582,7 +582,7 @@ async function doPlotDraw() {
       const full = await callModelWithTemp(
         system,
         userMsg,
-        txt => {
+        (txt, rlen) => {
           card.text = txt;
           const box = $('plotCards');
           const el = box.children[card.seq - 1];
@@ -590,7 +590,10 @@ async function doPlotDraw() {
             const t = el.querySelector('.card-text');
             if (t) t.textContent = txt;
             const l = el.querySelector('.card-loading span:last-child');
-            if (l) l.textContent = countWords(txt) + ' 字…';
+            if (l) {
+              if (!txt && rlen) l.textContent = `思考中…（${rlen} 字）`;
+              else l.textContent = countWords(txt) + ' 字…';
+            }
           }
         },
         plotAbort.signal,
