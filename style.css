@@ -1139,3 +1139,5 @@ textarea{resize:none;}
   margin-left:6px;
   cursor:pointer;
 }
+
+.switch-row[hidden]{display:none;}
