@@ -579,7 +579,7 @@ async function doPlotDraw() {
 
   const tasks = plotCards.map(async card => {
     try {
-      const full = await callModelWithTemp(
+      const full = await callModel(
         system,
         userMsg,
         (txt, rlen) => {
@@ -627,62 +627,6 @@ async function doPlotDraw() {
 }
 
 /* 用指定温度调用（剧情卡有自己的温度滑杆） */
-async function callModelWithTemp(systemMsg, userMsg, onChunk, signal, temp) {
-  const s = getSettings();
-  if (!s.base || !s.model) throw new Error('请先到设置里填写接口地址和模型');
-  if (!s.key) throw new Error('请先到设置里填写 API Key');
-
-  const url = s.base.replace(/\/+$/, '') + '/chat/completions';
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + s.key
-    },
-    signal,
-    body: JSON.stringify({
-      model: s.model,
-      stream: true,
-      temperature: typeof temp === 'number' ? temp : s.temperature,
-      messages: [
-        { role: 'system', content: systemMsg },
-        { role: 'user', content: userMsg }
-      ]
-    })
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`HTTP ${res.status} ${txt.slice(0, 200)}`);
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let full = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, idx).trim();
-      buffer = buffer.slice(idx + 1);
-      if (!line.startsWith('data:')) continue;
-      const data = line.slice(5).trim();
-      if (data === '[DONE]') continue;
-      try {
-        const json = JSON.parse(data);
-        const delta = json.choices && json.choices[0] && json.choices[0].delta;
-        const piece = delta && (delta.content || '');
-        if (piece) { full += piece; onChunk && onChunk(full); }
-      } catch (e) {}
-    }
-  }
-  return full;
-}
-
 /* ---------- 插入剧情编辑区 ---------- */
 function insertToPlot(text) {
   const ed = $('plotEditor');
