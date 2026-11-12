@@ -86,6 +86,7 @@ function activeModel() {
 
 /* 旧版单模型配置 → 迁移进 providers.deepseek */
 function migrateSettings(st) {
+  if (!st) return defaultSettings();
   if (!st.providers) {
     st.providers = defaultSettings().providers;
     if (st.base || st.key || st.model) {
@@ -102,6 +103,17 @@ function migrateSettings(st) {
     }
     if (!st.activeProvider) st.activeProvider = 'deepseek';
   }
+
+  // 二次兜底：确保两个 provider 都完整存在
+  const dd = defaultSettings().providers;
+  if (!st.providers) st.providers = {};
+  for (const k of ['deepseek', 'doubao']) {
+    st.providers[k] = Object.assign({}, dd[k], st.providers[k] || {});
+  }
+  if (st.activeProvider !== 'deepseek' && st.activeProvider !== 'doubao') {
+    st.activeProvider = 'deepseek';
+  }
+
   delete st.base;
   delete st.key;
   delete st.model;
@@ -1583,9 +1595,23 @@ async function handleShelfImport(inShelf) {
     b.data.ctx = Object.assign(defaultBookData().ctx, b.data.ctx || {});
   });
 
-  // 保留当前 API Key，避免导入后要重填
-  const keepKey = getSettings().key;
-  if (keepKey && !shelf.settings.key) shelf.settings.key = keepKey;
+  // 导入的书架可能带着旧版设置结构，先迁移
+  shelf.settings = migrateSettings(Object.assign(defaultSettings(), shelf.settings || {}));
+
+  // 保留当前的双模型配置（Key 等），避免导入后要重填
+  const cur = getSettings();
+  if (cur.providers) {
+    for (const pid of ['deepseek', 'doubao']) {
+      const a = cur.providers[pid];
+      const b = shelf.settings.providers[pid];
+      if (a && b) {
+        if (a.key && !b.key) b.key = a.key;
+        if (a.base && !b.base) b.base = a.base;
+        if (a.model && !b.model) b.model = a.model;
+      }
+    }
+  }
+  if (cur.activeProvider) shelf.settings.activeProvider = cur.activeProvider;
 
   if (!shelf.books.length) {
     shelf.books.push({
